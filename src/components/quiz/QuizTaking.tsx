@@ -31,7 +31,6 @@ interface QuizData {
   title: string;
   description: string;
   duration: number;
-  show_results_immediately: boolean;
   questions: Question[];
 }
 
@@ -79,7 +78,7 @@ const QuizTaking = () => {
       // Fetch quiz details
       const { data: quiz, error: quizError } = await supabase
         .from('quizzes')
-        .select('id, title, description, duration, status, show_results_immediately')
+        .select('id, title, description, duration, status')
         .eq('id', quizId)
         .maybeSingle();
 
@@ -111,11 +110,7 @@ const QuizTaking = () => {
       if (questionsError) throw questionsError;
 
       setQuizData({
-        id: quiz.id,
-        title: quiz.title,
-        description: quiz.description,
-        duration: quiz.duration,
-        show_results_immediately: quiz.show_results_immediately,
+        ...quiz,
         questions: questions?.map(q => ({
           ...q,
           options: q.options ? (q.options as string[]) : null
@@ -141,20 +136,6 @@ const QuizTaking = () => {
           return;
         }
         setAttemptId(attempt.id);
-
-        // Load saved answers for resume
-        const { data: savedAnswers } = await supabase
-          .from('attempt_answers')
-          .select('question_id, answer_text')
-          .eq('attempt_id', attempt.id);
-
-        if (savedAnswers) {
-          const answersMap: Record<string, string> = {};
-          savedAnswers.forEach(ans => {
-            answersMap[ans.question_id] = ans.answer_text;
-          });
-          setAnswers(answersMap);
-        }
       } else {
         // Authenticated user attempt
         const { data: { user } } = await supabase.auth.getUser();
@@ -249,34 +230,6 @@ const QuizTaking = () => {
   const handleAnswerChange = (questionId: string, answer: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
   };
-
-  // Auto-save answers every 30 seconds
-  useEffect(() => {
-    if (!attemptId || !quizData) return;
-
-    const autoSave = async () => {
-      try {
-        const answerData = Object.entries(answers).map(([questionId, answer]) => ({
-          attempt_id: attemptId,
-          question_id: questionId,
-          answer_text: answer,
-          is_correct: null, // Will be graded on submission
-          points_earned: 0
-        }));
-
-        if (answerData.length > 0) {
-          await supabase
-            .from('attempt_answers')
-            .upsert(answerData, { onConflict: 'attempt_id,question_id' });
-        }
-      } catch (error) {
-        console.error('Auto-save error:', error);
-      }
-    };
-
-    const interval = setInterval(autoSave, 30000); // Auto-save every 30 seconds
-    return () => clearInterval(interval);
-  }, [answers, attemptId, quizData]);
 
   const handleFlagQuestion = (questionId: string) => {
     setFlaggedQuestions(prev => {
@@ -374,13 +327,7 @@ const QuizTaking = () => {
 
       if (attemptError) throw attemptError;
 
-      // Check if results should be shown immediately
-      if (quizData.show_results_immediately) {
-        toast.success(`Quiz completed! Score: ${totalScore}/${maxScore} (${Math.round((totalScore/maxScore)*100)}%)`);
-      } else {
-        toast.success("Quiz submitted successfully!");
-      }
-      
+      toast.success("Quiz submitted and graded successfully!");
       navigate("/student");
       
     } catch (error) {

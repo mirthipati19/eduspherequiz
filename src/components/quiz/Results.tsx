@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { exportResultsToCSV } from "@/utils/csvExport";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -182,15 +181,7 @@ const Results = () => {
             <Calendar className="h-4 w-4 mr-2" />
             Date Range
           </Button>
-          <Button 
-            variant="academic" 
-            className="shadow-elegant"
-            onClick={() => {
-              exportResultsToCSV(filteredResults);
-              toast.success('Results exported to CSV');
-            }}
-            disabled={filteredResults.length === 0}
-          >
+          <Button variant="academic" className="shadow-elegant">
             <Download className="h-4 w-4 mr-2" />
             Export Results
           </Button>

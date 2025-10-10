@@ -134,12 +134,10 @@ const QuizList = () => {
                           <Eye className="h-4 w-4 mr-2" />
                           Preview
                         </DropdownMenuItem>
-                        <Link to={`/admin/edit/${quiz.id}`}>
-                          <DropdownMenuItem>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                        </Link>
+                        <DropdownMenuItem>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
                         {quiz.status === 'draft' && (
                           <DropdownMenuItem onClick={() => handleTogglePublish(quiz)}>
                             <Play className="h-4 w-4 mr-2" />

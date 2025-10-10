@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AdminDashboard from "@/components/quiz/AdminDashboard";
 import StudentDashboard from "@/components/quiz/StudentDashboard";
-import StudentResultView from "@/components/quiz/StudentResultView";
 import QuizTaking from "@/components/quiz/QuizTaking";
 import DirectQuizAccess from "@/components/quiz/DirectQuizAccess";
 import AuthPage from "@/components/auth/AuthPage";
@@ -27,7 +26,6 @@ const App = () => (
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/admin/*" element={<AdminDashboard />} />
               <Route path="/student" element={<StudentDashboard />} />
-              <Route path="/student/results/:attemptId" element={<StudentResultView />} />
               <Route path="/quiz/:quizId/direct" element={<DirectQuizAccess />} />
               <Route path="/quiz/:quizId/take" element={<QuizTaking />} />
               <Route path="/quiz/:quizId" element={<QuizTaking />} />

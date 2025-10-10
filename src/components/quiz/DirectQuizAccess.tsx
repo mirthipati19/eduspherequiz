@@ -40,7 +40,7 @@ const DirectQuizAccess = () => {
     try {
       const { data, error } = await supabase
         .from('quizzes')
-        .select('id, title, description, password_protected, access_password, duration, require_seb, max_attempts')
+        .select('id, title, description, password_protected, access_password, duration')
         .eq('id', quizId)
         .eq('status', 'published')
         .maybeSingle();
@@ -91,58 +91,20 @@ const DirectQuizAccess = () => {
     setIsStarting(true);
 
     try {
-      // Check max attempts if specified
-      const quizWithAttempts = quiz as any;
-      if (quizWithAttempts.max_attempts && quizWithAttempts.max_attempts > 0) {
-        const { data: existingAttempts, error: checkError } = await supabase
-          .from('quiz_attempts')
-          .select('id')
-          .eq('quiz_id', quiz.id)
-          .eq('student_email', studentEmail.trim())
-          .in('status', ['submitted', 'graded']);
-
-        if (checkError) throw checkError;
-
-        if (existingAttempts && existingAttempts.length >= quizWithAttempts.max_attempts) {
-          setError(`You have reached the maximum number of attempts (${quizWithAttempts.max_attempts}) for this quiz.`);
-          setIsStarting(false);
-          return;
-        }
-      }
-
-      // Check for existing in-progress attempt to resume
-      const { data: existingAttempt, error: existingError } = await supabase
+      // Create anonymous quiz attempt
+      const { data: attempt, error: attemptError } = await supabase
         .from('quiz_attempts')
-        .select('id, access_token')
-        .eq('quiz_id', quiz.id)
-        .eq('student_email', studentEmail.trim())
-        .eq('status', 'in_progress')
-        .maybeSingle();
+        .insert({
+          quiz_id: quiz.id,
+          student_name: studentName.trim(),
+          student_email: studentEmail.trim(),
+          access_token: crypto.randomUUID(), // Generate unique access token
+          status: 'in_progress'
+        })
+        .select()
+        .single();
 
-      if (existingError && existingError.code !== 'PGRST116') throw existingError;
-
-      let attempt;
-      if (existingAttempt) {
-        // Resume existing attempt
-        attempt = existingAttempt;
-        toast.success("Resuming your previous attempt");
-      } else {
-        // Create new attempt
-        const { data: newAttempt, error: attemptError } = await supabase
-          .from('quiz_attempts')
-          .insert({
-            quiz_id: quiz.id,
-            student_name: studentName.trim(),
-            student_email: studentEmail.trim(),
-            access_token: crypto.randomUUID(),
-            status: 'in_progress'
-          })
-          .select()
-          .single();
-
-        if (attemptError) throw attemptError;
-        attempt = newAttempt;
-      }
+      if (attemptError) throw attemptError;
 
       // Check if SEB is required and trigger download
       if ((quiz as any).require_seb) {

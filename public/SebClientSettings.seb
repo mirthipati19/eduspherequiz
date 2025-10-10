@@ -5,13 +5,13 @@
     <key>originatorVersion</key>
     <string>SEB_Win_2.1.1</string>
     <key>startURL</key>
-    <string>https://preview--eduspherequiz.lovable.app/student</string>
+    <string>https://preview--secure-canvas-quiz.lovable.app/student</string>
     <key>startResource</key>
     <string />
     <key>sebServerURL</key>
     <string />
     <key>hashedAdminPassword</key>
-    <string />
+    <string>99F2BDF9942653AB32D9DFA0B43C72C3FBBB9679450FD965C590C224897B848A</string>
     <key>allowQuit</key>
     <true />
     <key>ignoreExitKeys</key>
@@ -37,7 +37,7 @@
     <key>useAsymmetricOnlyEncryption</key>
     <false />
     <key>browserViewMode</key>
-    <integer>0</integer>
+    <integer>1</integer>
     <key>browserWindowAllowAddressBar</key>
     <false />
     <key>newBrowserWindowAllowAddressBar</key>
@@ -203,7 +203,7 @@
     <key>allowUploads</key>
     <true />
     <key>examKeySalt</key>
-    <data>FGGkHJEBoOWA9A+3ICpHUci+eyGM67cGg+EwU/LlLSs=</data>
+    <data>1OqaJrcSQPu7yuX2LMkX/jWqOCWGRU29G2YSAqUx/q0=</data>
     <key>examSessionClearCookiesOnEnd</key>
     <true />
     <key>examSessionClearCookiesOnStart</key>
@@ -215,7 +215,7 @@
     <key>sendBrowserExamKey</key>
     <false />
     <key>quitURL</key>
-    <string />
+    <string>www.authexa.me</string>
     <key>quitURLConfirm</key>
     <true />
     <key>restartExamURL</key>
@@ -246,7 +246,7 @@
     <array>
       <dict>
         <key>active</key>
-        <true />
+        <false />
         <key>autostart</key>
         <false />
         <key>iconInTaskbar</key>

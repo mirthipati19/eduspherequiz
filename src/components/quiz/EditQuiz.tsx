@@ -13,7 +13,6 @@ import { Separator } from "@/components/ui/separator";
 import { useQuizzes, useQuizQuestions } from "@/hooks/useQuizzes";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { ImageUploadService } from "@/services/imageUpload";
 import { toast } from "sonner";
 
 interface LocalQuestion {
@@ -21,9 +20,8 @@ interface LocalQuestion {
   type: "multiple-choice" | "fill-blank" | "short-answer";
   text: string;
   options: string[];
-  correctAnswer: number | string;
+  correctAnswer: number;
   hasImage: boolean;
-  imageUrl?: string;
   points: number;
 }
 
@@ -66,27 +64,15 @@ const EditQuiz = () => {
   useEffect(() => {
     if (questions.length > 0) {
       // Convert database questions to local format
-      const convertedQuestions = questions.map(q => {
-        let correctAnswer: number | string = 0;
-        if (q.question_type === 'multiple-choice' && Array.isArray(q.options)) {
-          correctAnswer = q.options.indexOf(q.correct_answer) >= 0 
-            ? q.options.indexOf(q.correct_answer) 
-            : 0;
-        } else {
-          correctAnswer = q.correct_answer || '';
-        }
-
-        return {
-          id: q.id,
-          type: q.question_type as "multiple-choice" | "fill-blank" | "short-answer",
-          text: q.question_text,
-          options: Array.isArray(q.options) ? q.options : [],
-          correctAnswer,
-          hasImage: q.has_image || false,
-          imageUrl: q.image_url || undefined,
-          points: q.points
-        };
-      });
+      const convertedQuestions = questions.map(q => ({
+        id: q.id,
+        type: q.question_type as "multiple-choice" | "fill-blank" | "short-answer",
+        text: q.question_text,
+        options: Array.isArray(q.options) ? q.options : [],
+        correctAnswer: 0, // Will need to parse from correct_answer
+        hasImage: q.has_image,
+        points: q.points
+      }));
       setLocalQuestions(convertedQuestions);
     }
   }, [questions]);
@@ -114,8 +100,8 @@ const EditQuiz = () => {
         setAccessPassword(quiz.access_password || "");
         setMaxAttempts(quiz.max_attempts?.toString() || "");
         setRequireSeb(quiz.require_seb);
-        setSebConfigKey("93b5ee33edfe55df832cc088ac9c8b8e0a8c5137c0135e358315ad9fb7d0baa4");
-        setSebBrowserExamKey("936a0c8c44a491a2d0944b50c20e547898b299a716da29a64a538b534caa6200");
+        setSebConfigKey(quiz.seb_config_key || "");
+        setSebBrowserExamKey(quiz.seb_browser_exam_key || "");
         setSebQuitUrl(quiz.seb_quit_url || "");
       }
 
@@ -152,23 +138,6 @@ const EditQuiz = () => {
     setLocalQuestions(localQuestions.filter(q => q.id !== id));
   };
 
-  const handleImageUpload = async (questionId: string, file: File) => {
-    if (!quizId) return;
-    try {
-      const imageUrl = await ImageUploadService.uploadQuestionImage(
-        quizId,
-        questionId,
-        file
-      );
-      updateLocalQuestion(questionId, 'imageUrl', imageUrl);
-      updateLocalQuestion(questionId, 'hasImage', true);
-      toast.success('Image uploaded successfully');
-    } catch (error) {
-      console.error('Image upload error:', error);
-      toast.error('Failed to upload image');
-    }
-  };
-
   const handleSaveQuiz = async () => {
     if (!quizId) return;
     
@@ -192,9 +161,9 @@ const EditQuiz = () => {
         access_password: passwordProtected ? accessPassword : null,
         max_attempts: maxAttempts ? parseInt(maxAttempts) : null,
         require_seb: requireSeb,
-        seb_config_key: requireSeb ? "93b5ee33edfe55df832cc088ac9c8b8e0a8c5137c0135e358315ad9fb7d0baa4" : null,
-        seb_browser_exam_key: requireSeb ? "936a0c8c44a491a2d0944b50c20e547898b299a716da29a64a538b534caa6200" : null,
-        seb_quit_url: sebQuitUrl || null
+        seb_config_key: sebConfigKey || undefined,
+        seb_browser_exam_key: sebBrowserExamKey || undefined,
+        seb_quit_url: sebQuitUrl || undefined
       });
 
       // Save/update questions
@@ -206,13 +175,10 @@ const EditQuiz = () => {
             question_text: question.text,
             question_type: question.type,
             options: question.type === "multiple-choice" ? question.options : undefined,
-            correct_answer: question.type === "multiple-choice" 
-              ? question.options[question.correctAnswer as number]
-              : typeof question.correctAnswer === 'string' ? question.correctAnswer : undefined,
+            correct_answer: question.type === "multiple-choice" ? question.options[question.correctAnswer] : undefined,
             points: question.points,
             order_index: localQuestions.indexOf(question),
-            has_image: question.hasImage,
-            image_url: question.imageUrl || undefined
+            has_image: question.hasImage
           });
         } else {
           // Update existing question
@@ -220,13 +186,10 @@ const EditQuiz = () => {
             question_text: question.text,
             question_type: question.type,
             options: question.type === "multiple-choice" ? question.options : undefined,
-            correct_answer: question.type === "multiple-choice" 
-              ? question.options[question.correctAnswer as number]
-              : typeof question.correctAnswer === 'string' ? question.correctAnswer : undefined,
+            correct_answer: question.type === "multiple-choice" ? question.options[question.correctAnswer] : undefined,
             points: question.points,
             order_index: localQuestions.indexOf(question),
-            has_image: question.hasImage,
-            image_url: question.imageUrl || undefined
+            has_image: question.hasImage
           });
         }
       }
@@ -424,22 +387,20 @@ const EditQuiz = () => {
                       <Label htmlFor="seb-config-key">SEB Config Key</Label>
                       <Input
                         id="seb-config-key"
-                        value="93b5ee33edfe55df832cc088ac9c8b8e0a8c5137c0135e358315ad9fb7d0baa4"
-                        disabled
-                        className="bg-muted"
+                        value={sebConfigKey}
+                        onChange={(e) => setSebConfigKey(e.target.value)}
+                        placeholder="Enter SEB Config Key..."
                       />
-                      <p className="text-xs text-muted-foreground">Automatically configured system key</p>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="seb-browser-key">SEB Browser Exam Key</Label>
                       <Input
                         id="seb-browser-key"
-                        value="936a0c8c44a491a2d0944b50c20e547898b299a716da29a64a538b534caa6200"
-                        disabled
-                        className="bg-muted"
+                        value={sebBrowserExamKey}
+                        onChange={(e) => setSebBrowserExamKey(e.target.value)}
+                        placeholder="Enter Browser Exam Key..."
                       />
-                      <p className="text-xs text-muted-foreground">Automatically configured system key</p>
                     </div>
 
                     <div className="space-y-2">
@@ -519,40 +480,14 @@ const EditQuiz = () => {
                     </div>
 
                     <div className="flex items-center space-x-4">
-                      <div>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          id={`image-upload-${question.id}`}
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleImageUpload(question.id, file);
-                          }}
-                        />
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => document.getElementById(`image-upload-${question.id}`)?.click()}
-                        >
-                          <Image className="h-4 w-4 mr-2" />
-                          {question.hasImage ? 'Change Image' : 'Add Image'}
-                        </Button>
-                      </div>
+                      <Button variant="outline" size="sm" disabled>
+                        <Image className="h-4 w-4 mr-2" />
+                        Add Image
+                      </Button>
                       <Badge variant="outline">
                         Points: {question.points}
                       </Badge>
                     </div>
-
-                    {question.hasImage && question.imageUrl && (
-                      <div className="relative w-full max-w-xs">
-                        <img 
-                          src={question.imageUrl} 
-                          alt="Question" 
-                          className="w-full rounded-md border"
-                        />
-                      </div>
-                    )}
 
                     {question.type === "multiple-choice" && (
                       <div className="space-y-2">
@@ -584,21 +519,15 @@ const EditQuiz = () => {
                     {question.type === "fill-blank" && (
                       <div className="space-y-2">
                         <Label>Correct Answer</Label>
-                        <Input 
-                          value={typeof question.correctAnswer === 'string' ? question.correctAnswer : ''}
-                          onChange={(e) => updateLocalQuestion(question.id, 'correctAnswer', e.target.value)}
-                          placeholder="Enter the correct answer..." 
-                        />
+                        <Input placeholder="Enter the correct answer..." />
                       </div>
                     )}
 
                     {question.type === "short-answer" && (
                       <div className="space-y-2">
-                        <Label>Correct Answer / Answer Guidelines</Label>
+                        <Label>Answer Guidelines (for manual grading)</Label>
                         <Textarea 
-                          value={typeof question.correctAnswer === 'string' ? question.correctAnswer : ''}
-                          onChange={(e) => updateLocalQuestion(question.id, 'correctAnswer', e.target.value)}
-                          placeholder="Provide the correct answer or key points for manual grading..."
+                          placeholder="Provide key points that should be included in the answer..."
                           rows={3}
                         />
                       </div>

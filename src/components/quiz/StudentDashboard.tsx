@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Clock, BookOpen, Award, TrendingUp, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,6 @@ interface Quiz {
   description: string;
   duration: number;
   require_seb: boolean;
-  allow_multiple_attempts: boolean;
   created_at: string;
 }
 
@@ -26,7 +25,6 @@ interface QuizAttempt {
 }
 
 const StudentDashboard = () => {
-  const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +38,7 @@ const StudentDashboard = () => {
     try {
       const { data, error } = await supabase
         .from('quizzes')
-        .select('id, title, description, duration, require_seb, created_at, allow_multiple_attempts')
+        .select('id, title, description, duration, require_seb, created_at')
         .eq('status', 'published')
         .order('created_at', { ascending: false });
 
@@ -56,7 +54,7 @@ const StudentDashboard = () => {
       const { data, error } = await supabase
         .from('quiz_attempts')
         .select('id, quiz_id, score, max_score, status')
-        .in('status', ['submitted', 'graded']);
+        .eq('status', 'submitted');
 
       if (error) throw error;
       setAttempts(data || []);
@@ -191,7 +189,7 @@ const StudentDashboard = () => {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1">
               {quizzes.map((quiz) => {
                 const attempt = getQuizAttempt(quiz.id);
-                const isCompleted = !!attempt && !quiz.allow_multiple_attempts;
+                const isCompleted = !!attempt;
                 
                 return (
                   <Card key={quiz.id} className="shadow-card hover:shadow-hover transition-smooth">
@@ -219,20 +217,13 @@ const StudentDashboard = () => {
                           </div>
 
                           {isCompleted && attempt && (
-                            <div className="space-y-2 mb-4">
+                            <div className="flex items-center space-x-4 mb-4">
                               <div className="flex items-center space-x-2">
                                 <Award className="h-4 w-4 text-accent" />
                                 <span className="font-medium text-accent">
                                   Score: {attempt.score}/{attempt.max_score} ({((attempt.score / attempt.max_score) * 100).toFixed(1)}%)
                                 </span>
                               </div>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => navigate(`/student/results/${attempt.id}`)}
-                              >
-                                View Detailed Results
-                              </Button>
                             </div>
                           )}
 
