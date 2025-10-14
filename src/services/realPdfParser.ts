@@ -109,10 +109,10 @@ export class RealPDFParser {
           // Continue with available options or use fallback
         }
 
-        // Render page as image
+        // Render page as image (reduced scale for faster processing)
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d')!;
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: 1.0 });
         
         canvas.height = viewport.height;
         canvas.width = viewport.width;
@@ -132,7 +132,7 @@ export class RealPDFParser {
           question_text: questionText,
           question_type: 'multiple-choice',
           options: options.length === 4 ? options : ['A', 'B', 'C', 'D'], // Fallback
-          correct_answer: null, // Will be set manually
+          correct_answer: '', // Empty string to satisfy NOT NULL constraint
           points: 2,
           order_index: questionNum - 1,
           has_image: true,
@@ -192,6 +192,8 @@ export class RealPDFParser {
     password?: string
   ): Promise<string> {
     try {
+      toast.loading('Creating quiz...');
+      
       // Create quiz in database
       const { data: quiz, error: quizError } = await supabase
         .from('quizzes')
@@ -210,48 +212,73 @@ export class RealPDFParser {
       if (quizError) throw quizError;
       if (!quiz) throw new Error('Failed to create quiz');
 
-      // Process questions with images
-      const questionsWithImages = await Promise.all(
-        parsedQuiz.questions.map(async (question, index) => {
-          let imageUrl = null;
-          
-          if (question.has_image && question.image_data) {
-            try {
-              imageUrl = await this.uploadQuizImage(
-                quiz.id,
-                index,
-                question.image_data.blob,
-                question.image_data.filename
-              );
-            } catch (error) {
-              console.error(`Failed to upload image for question ${index}:`, error);
-              // Continue without image rather than failing
-            }
-          }
+      toast.dismiss();
+      toast.loading(`Inserting ${parsedQuiz.questions.length} questions...`);
 
-          return {
-            quiz_id: quiz.id,
-            question_text: question.question_text,
-            question_type: question.question_type,
-            options: question.options,
-            correct_answer: question.correct_answer,
-            points: question.points,
-            order_index: question.order_index,
-            has_image: question.has_image,
-            image_url: imageUrl
-          };
-        })
-      );
+      // Insert questions WITHOUT images first (for speed)
+      const questionsToInsert = parsedQuiz.questions.map(question => ({
+        quiz_id: quiz.id,
+        question_text: question.question_text,
+        question_type: question.question_type,
+        options: question.options,
+        correct_answer: question.correct_answer || '',
+        points: question.points,
+        order_index: question.order_index,
+        has_image: question.has_image,
+        image_url: null // Will be updated after upload
+      }));
 
-      // Insert questions
-      const { error: questionsError } = await supabase
+      const { data: insertedQuestions, error: questionsError } = await supabase
         .from('questions')
-        .insert(questionsWithImages);
+        .insert(questionsToInsert)
+        .select('id, order_index');
 
-      if (questionsError) throw questionsError;
+      if (questionsError) {
+        toast.dismiss();
+        toast.error(`Questions insert failed: ${questionsError.message}`);
+        throw questionsError;
+      }
 
+      if (!insertedQuestions || insertedQuestions.length === 0) {
+        toast.dismiss();
+        toast.error('No questions were created');
+        throw new Error('No questions were created');
+      }
+
+      toast.dismiss();
+      toast.loading('Uploading images in background...');
+
+      // Upload images and patch questions in parallel (non-blocking)
+      const imageUploadPromises = parsedQuiz.questions.map(async (question, index) => {
+        if (!question.has_image || !question.image_data) return;
+
+        const insertedQuestion = insertedQuestions.find(q => q.order_index === question.order_index);
+        if (!insertedQuestion) return;
+
+        try {
+          const imageUrl = await this.uploadQuizImage(
+            quiz.id,
+            index,
+            question.image_data.blob,
+            question.image_data.filename
+          );
+
+          await supabase
+            .from('questions')
+            .update({ image_url: imageUrl })
+            .eq('id', insertedQuestion.id);
+        } catch (error) {
+          console.error(`Failed to upload/patch image for question ${index}:`, error);
+        }
+      });
+
+      // Wait for all uploads to complete
+      await Promise.allSettled(imageUploadPromises);
+
+      toast.dismiss();
       return quiz.id;
     } catch (error) {
+      toast.dismiss();
       console.error('Quiz creation error:', error);
       throw error;
     }

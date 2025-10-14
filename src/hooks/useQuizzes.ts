@@ -88,44 +88,50 @@ export function useQuizzes() {
 
   const createQuiz = async (quizData: CreateQuizData): Promise<Quiz | null> => {
     try {
-      console.log("createQuiz function called with data:", quizData);
-      
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      console.log("Current user data:", userData);
       
       if (userError || !userData.user) {
-        console.error("User not authenticated:", userError);
         toast.error("You must be logged in to create a quiz");
+        return null;
+      }
+
+      // Verify admin role
+      const { data: hasAdminRole, error: roleError } = await supabase.rpc('has_role', {
+        _user_id: userData.user.id,
+        _role: 'admin'
+      });
+
+      if (roleError || !hasAdminRole) {
+        toast.error("Admin access required to create quizzes");
         return null;
       }
 
       const insertData = { 
         ...quizData, 
         created_by: userData.user.id,
-        status: 'draft' as const
+        status: quizData.status || 'draft' as const
       };
-      
-      console.log("Data to insert:", insertData);
 
       const { data, error } = await supabase
         .from('quizzes')
         .insert([insertData])
-        .select()
-        .single();
+        .select('id, title, status, created_at')
+        .maybeSingle();
 
-      console.log("Supabase response:", { data, error });
-
-      if (error) {
-        console.error("Supabase error:", error);
-        throw error;
+      if (error) throw error;
+      
+      if (!data) {
+        toast.error("Quiz created but hidden due to permissions");
+        return null;
       }
       
-      setQuizzes(prev => [data, ...prev]);
+      await fetchQuizzes();
       toast.success('Quiz created successfully!');
-      return data;
+      return data as Quiz;
     } catch (error) {
       console.error('Error creating quiz:', error);
-      toast.error('Failed to create quiz: ' + (error as any)?.message || 'Unknown error');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to create quiz: ${message}`);
       return null;
     }
   };
@@ -236,9 +242,14 @@ export function useQuizQuestions(quizId: string) {
 
   const createQuestion = async (questionData: CreateQuestionData): Promise<Question | null> => {
     try {
+      const insertData = {
+        ...questionData,
+        correct_answer: questionData.correct_answer || ''
+      };
+      
       const { data, error } = await supabase
         .from('questions')
-        .insert([questionData])
+        .insert([insertData])
         .select()
         .single();
 
