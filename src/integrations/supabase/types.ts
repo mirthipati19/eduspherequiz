@@ -97,9 +97,9 @@ export type Database = {
       }
       questions: {
         Row: {
-          correct_answer: string | null
+          correct_answer: string
           created_at: string
-          has_image: boolean
+          has_image: boolean | null
           id: string
           image_url: string | null
           options: Json | null
@@ -111,9 +111,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          correct_answer?: string | null
+          correct_answer: string
           created_at?: string
-          has_image?: boolean
+          has_image?: boolean | null
           id?: string
           image_url?: string | null
           options?: Json | null
@@ -125,9 +125,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          correct_answer?: string | null
+          correct_answer?: string
           created_at?: string
-          has_image?: boolean
+          has_image?: boolean | null
           id?: string
           image_url?: string | null
           options?: Json | null
@@ -153,7 +153,7 @@ export type Database = {
           access_token: string | null
           created_at: string
           id: string
-          is_seb_session: boolean
+          is_seb_session: boolean | null
           max_score: number | null
           quiz_id: string
           score: number | null
@@ -171,7 +171,7 @@ export type Database = {
           access_token?: string | null
           created_at?: string
           id?: string
-          is_seb_session?: boolean
+          is_seb_session?: boolean | null
           max_score?: number | null
           quiz_id: string
           score?: number | null
@@ -189,7 +189,7 @@ export type Database = {
           access_token?: string | null
           created_at?: string
           id?: string
-          is_seb_session?: boolean
+          is_seb_session?: boolean | null
           max_score?: number | null
           quiz_id?: string
           score?: number | null
@@ -216,63 +216,84 @@ export type Database = {
       quizzes: {
         Row: {
           access_password: string | null
-          allow_multiple_attempts: boolean
+          allow_multiple_attempts: boolean | null
           created_at: string
           created_by: string
           description: string | null
-          duration: number
+          duration: number | null
           id: string
           max_attempts: number | null
-          password_protected: boolean
-          require_seb: boolean
+          password_protected: boolean | null
+          require_seb: boolean | null
           seb_browser_exam_key: string | null
           seb_config_key: string | null
           seb_quit_url: string | null
-          show_results_immediately: boolean
-          shuffle_questions: boolean
+          show_results_immediately: boolean | null
+          shuffle_questions: boolean | null
           status: Database["public"]["Enums"]["quiz_status"]
           title: string
           updated_at: string
         }
         Insert: {
           access_password?: string | null
-          allow_multiple_attempts?: boolean
+          allow_multiple_attempts?: boolean | null
           created_at?: string
           created_by: string
           description?: string | null
-          duration?: number
+          duration?: number | null
           id?: string
           max_attempts?: number | null
-          password_protected?: boolean
-          require_seb?: boolean
+          password_protected?: boolean | null
+          require_seb?: boolean | null
           seb_browser_exam_key?: string | null
           seb_config_key?: string | null
           seb_quit_url?: string | null
-          show_results_immediately?: boolean
-          shuffle_questions?: boolean
+          show_results_immediately?: boolean | null
+          shuffle_questions?: boolean | null
           status?: Database["public"]["Enums"]["quiz_status"]
           title: string
           updated_at?: string
         }
         Update: {
           access_password?: string | null
-          allow_multiple_attempts?: boolean
+          allow_multiple_attempts?: boolean | null
           created_at?: string
           created_by?: string
           description?: string | null
-          duration?: number
+          duration?: number | null
           id?: string
           max_attempts?: number | null
-          password_protected?: boolean
-          require_seb?: boolean
+          password_protected?: boolean | null
+          require_seb?: boolean | null
           seb_browser_exam_key?: string | null
           seb_config_key?: string | null
           seb_quit_url?: string | null
-          show_results_immediately?: boolean
-          shuffle_questions?: boolean
+          show_results_immediately?: boolean | null
+          shuffle_questions?: boolean | null
           status?: Database["public"]["Enums"]["quiz_status"]
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -285,8 +306,16 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       attempt_status: "in_progress" | "submitted" | "graded"
       question_type: "multiple-choice" | "fill-blank" | "short-answer"
       quiz_status: "draft" | "published" | "archived"
@@ -417,6 +446,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       attempt_status: ["in_progress", "submitted", "graded"],
       question_type: ["multiple-choice", "fill-blank", "short-answer"],
       quiz_status: ["draft", "published", "archived"],
