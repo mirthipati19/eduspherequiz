@@ -130,13 +130,17 @@ const QuizList = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Preview
+                        <DropdownMenuItem asChild>
+                          <Link to={`/quiz/${quiz.id}/take?preview=true`} className="flex items-center">
+                            <Eye className="h-4 w-4 mr-2" />
+                            Preview
+                          </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
+                        <DropdownMenuItem asChild>
+                          <Link to={`/admin/edit/${quiz.id}`} className="flex items-center">
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </Link>
                         </DropdownMenuItem>
                         {quiz.status === 'draft' && (
                           <DropdownMenuItem onClick={() => handleTogglePublish(quiz)}>

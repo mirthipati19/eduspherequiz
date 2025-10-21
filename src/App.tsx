@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import AdminDashboard from "@/components/quiz/AdminDashboard";
 import StudentDashboard from "@/components/quiz/StudentDashboard";
 import QuizTaking from "@/components/quiz/QuizTaking";
+import QuizResults from "@/components/quiz/QuizResults";
 import DirectQuizAccess from "@/components/quiz/DirectQuizAccess";
 import AuthPage from "@/components/auth/AuthPage";
 import NotFound from "./pages/NotFound";
@@ -29,6 +30,7 @@ const App = () => (
               <Route path="/quiz/:quizId/direct" element={<DirectQuizAccess />} />
               <Route path="/quiz/:quizId/take" element={<QuizTaking />} />
               <Route path="/quiz/:quizId" element={<QuizTaking />} />
+              <Route path="/quiz/results" element={<QuizResults />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

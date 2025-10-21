@@ -16,6 +16,11 @@ interface Quiz {
   password_protected: boolean;
   access_password: string | null;
   duration: number;
+  allow_multiple_attempts: boolean;
+  max_attempts: number | null;
+  require_seb: boolean;
+  shuffle_questions: boolean;
+  show_results_immediately: boolean;
 }
 
 const DirectQuizAccess = () => {
@@ -40,7 +45,7 @@ const DirectQuizAccess = () => {
     try {
       const { data, error } = await supabase
         .from('quizzes')
-        .select('id, title, description, password_protected, access_password, duration')
+        .select('id, title, description, password_protected, access_password, duration, allow_multiple_attempts, max_attempts, require_seb, shuffle_questions, show_results_immediately')
         .eq('id', quizId)
         .eq('status', 'published')
         .maybeSingle();
@@ -50,7 +55,7 @@ const DirectQuizAccess = () => {
         return;
       }
 
-      setQuiz(data);
+      setQuiz(data as any);
     } catch (err) {
       setError("Failed to load quiz");
     } finally {
@@ -91,6 +96,32 @@ const DirectQuizAccess = () => {
     setIsStarting(true);
 
     try {
+      // Check attempt limits if not allowing multiple attempts
+      if (!quiz.allow_multiple_attempts || (quiz.max_attempts && quiz.max_attempts > 0)) {
+        const { data: existingAttempts, error: countError } = await supabase
+          .from('quiz_attempts')
+          .select('id, status')
+          .eq('quiz_id', quiz.id)
+          .eq('student_email', studentEmail.trim());
+
+        if (countError) throw countError;
+
+        if (existingAttempts && existingAttempts.length > 0) {
+          if (!quiz.allow_multiple_attempts) {
+            setError("You have already attempted this quiz. Multiple attempts are not allowed.");
+            setIsStarting(false);
+            return;
+          }
+
+          const completedAttempts = existingAttempts.filter(a => a.status === 'graded' || a.status === 'submitted');
+          if (quiz.max_attempts && completedAttempts.length >= quiz.max_attempts) {
+            setError(`You have reached the maximum number of attempts (${quiz.max_attempts}) for this quiz.`);
+            setIsStarting(false);
+            return;
+          }
+        }
+      }
+
       // Create anonymous quiz attempt
       const { data: attempt, error: attemptError } = await supabase
         .from('quiz_attempts')

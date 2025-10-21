@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { Clock, AlertCircle, ChevronLeft, ChevronRight, Flag, Check, ZoomIn } from "lucide-react";
+import { Clock, AlertCircle, ChevronLeft, ChevronRight, Flag, Check, ZoomIn, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuizzes } from "@/hooks/useQuizzes";
+import { useQuizProgress } from "@/hooks/useQuizProgress";
 import ImageZoom from "./ImageZoom";
 import { toast } from "sonner";
 
@@ -31,7 +32,19 @@ interface QuizData {
   title: string;
   description: string;
   duration: number;
+  shuffle_questions: boolean;
+  show_results_immediately: boolean;
   questions: Question[];
+}
+
+// Fisher-Yates shuffle algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 
 const QuizTaking = () => {
@@ -39,6 +52,7 @@ const QuizTaking = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  const isPreview = searchParams.get('preview') === 'true';
   
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +63,52 @@ const QuizTaking = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { progress, saveProgress, clearProgress } = useQuizProgress(
+    isPreview ? null : attemptId, 
+    isPreview ? null : quizId || null
+  );
+
+  // Load saved progress if resuming
+  useEffect(() => {
+    if (progress && !isPreview) {
+      setCurrentQuestionIndex(progress.currentQuestionIndex);
+      setAnswers(progress.answers);
+      setFlaggedQuestions(new Set(progress.flaggedQuestions));
+      setTimeRemaining(progress.timeRemaining);
+      toast.success("Quiz progress restored!");
+    }
+  }, [progress, isPreview]);
+
+  // Auto-save progress periodically
+  useEffect(() => {
+    if (!isPreview && attemptId && quizData) {
+      saveTimerRef.current = setInterval(() => {
+        saveProgress({
+          currentQuestionIndex,
+          answers,
+          flaggedQuestions: Array.from(flaggedQuestions),
+          timeRemaining
+        });
+
+        // Also save to backend
+        supabase
+          .from('quiz_attempts')
+          .update({
+            time_spent: (quizData.duration * 60) - timeRemaining
+          })
+          .eq('id', attemptId)
+          .then(({ error }) => {
+            if (error) console.error('Failed to sync progress:', error);
+          });
+      }, 5000); // Save every 5 seconds
+
+      return () => {
+        if (saveTimerRef.current) clearInterval(saveTimerRef.current);
+      };
+    }
+  }, [isPreview, attemptId, currentQuestionIndex, answers, flaggedQuestions, timeRemaining, quizData]);
 
   useEffect(() => {
     if (quizId) {
@@ -78,7 +138,7 @@ const QuizTaking = () => {
       // Fetch quiz details
       const { data: quiz, error: quizError } = await supabase
         .from('quizzes')
-        .select('id, title, description, duration, status')
+        .select('id, title, description, duration, status, shuffle_questions, show_results_immediately')
         .eq('id', quizId)
         .maybeSingle();
 
@@ -90,8 +150,8 @@ const QuizTaking = () => {
         return;
       }
 
-      // Check if quiz is published or if user is the creator
-      if (quiz.status !== 'published') {
+      // Check if quiz is published or if user is the creator/preview mode
+      if (quiz.status !== 'published' && !isPreview) {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           toast.error("Quiz not available");
@@ -109,17 +169,29 @@ const QuizTaking = () => {
 
       if (questionsError) throw questionsError;
 
+      let processedQuestions = questions?.map(q => ({
+        ...q,
+        options: q.options ? (q.options as string[]) : null
+      })) || [];
+
+      // Shuffle questions if enabled (but not in preview mode to maintain consistency)
+      if (quiz.shuffle_questions && !progress) {
+        processedQuestions = shuffleArray(processedQuestions);
+      }
+
       setQuizData({
         ...quiz,
-        questions: questions?.map(q => ({
-          ...q,
-          options: q.options ? (q.options as string[]) : null
-        })) || []
+        questions: processedQuestions
       });
 
       setTimeRemaining(quiz.duration * 60); // Convert minutes to seconds
 
-      // Create or find attempt
+      // Create or find attempt (skip in preview mode)
+      if (isPreview) {
+        toast.info("Preview Mode: Your answers won't be saved");
+        setLoading(false);
+        return;
+      }
       if (token) {
         // Anonymous attempt with token
         const { data: attempt, error: attemptError } = await supabase
@@ -214,7 +286,7 @@ const QuizTaking = () => {
   }
 
   const currentQuestion = quizData.questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / quizData.questions.length) * 100;
+  const progressPercentage = ((currentQuestionIndex + 1) / quizData.questions.length) * 100;
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -256,6 +328,12 @@ const QuizTaking = () => {
   };
 
   const handleSubmitQuiz = async () => {
+    if (isPreview) {
+      toast.info("Preview mode - Quiz not submitted");
+      navigate('/admin/quizzes');
+      return;
+    }
+
     if (!attemptId || !quizData) return;
     
     setIsSubmitting(true);
@@ -327,8 +405,18 @@ const QuizTaking = () => {
 
       if (attemptError) throw attemptError;
 
-      toast.success("Quiz submitted and graded successfully!");
-      navigate("/student");
+      // Clear saved progress
+      clearProgress();
+
+      toast.success("Quiz submitted successfully!");
+
+      // Navigate based on show_results_immediately setting
+      if (quizData.show_results_immediately) {
+        navigate(`/quiz/results?attemptId=${attemptId}${token ? `&token=${token}` : ''}`);
+      } else {
+        toast.info("Your results will be available once graded by your instructor");
+        navigate(token ? '/' : '/student');
+      }
       
     } catch (error) {
       console.error('Error submitting quiz:', error);
@@ -349,6 +437,14 @@ const QuizTaking = () => {
       {/* Header with Timer */}
       <header className="border-b border-border bg-card shadow-card sticky top-0 z-10">
         <div className="mx-auto max-w-4xl px-6 py-4">
+          {isPreview && (
+            <div className="mb-3">
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary">
+                <Eye className="h-3 w-3 mr-1" />
+                Preview Mode
+              </Badge>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-lg font-semibold text-foreground">{quizData.title}</h1>
@@ -376,7 +472,7 @@ const QuizTaking = () => {
           </div>
           
           <div className="mt-4">
-            <Progress value={progress} className="h-2" />
+            <Progress value={progressPercentage} className="h-2" />
           </div>
         </div>
       </header>
