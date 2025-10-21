@@ -38,7 +38,10 @@ const CreateQuiz = () => {
   const [duration, setDuration] = useState("60");
   const [allowMultipleAttempts, setAllowMultipleAttempts] = useState(false);
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
-  const [showResultsImmediately, setShowResultsImmediately] = useState(false);
+  const [showResultsImmediately, setShowResultsImmediately] = useState(true);
+  const [passwordProtected, setPasswordProtected] = useState(false);
+  const [accessPassword, setAccessPassword] = useState("");
+  const [maxAttempts, setMaxAttempts] = useState("1");
   
   // SEB settings
   const [requireSeb, setRequireSeb] = useState(false);
@@ -115,6 +118,9 @@ const CreateQuiz = () => {
         allow_multiple_attempts: allowMultipleAttempts,
         shuffle_questions: shuffleQuestions,
         show_results_immediately: showResultsImmediately,
+        password_protected: passwordProtected,
+        access_password: passwordProtected ? accessPassword : undefined,
+        max_attempts: maxAttempts ? parseInt(maxAttempts) : undefined,
         require_seb: requireSeb,
         seb_config_key: sebConfigKey || undefined,
         seb_browser_exam_key: sebBrowserExamKey || undefined,
@@ -266,6 +272,20 @@ const CreateQuiz = () => {
                   />
                 </div>
 
+                {allowMultipleAttempts && (
+                  <div className="space-y-2">
+                    <Label htmlFor="max-attempts">Max Attempts</Label>
+                    <Input
+                      id="max-attempts"
+                      type="number"
+                      min="1"
+                      value={maxAttempts}
+                      onChange={(e) => setMaxAttempts(e.target.value)}
+                      placeholder="Enter max attempts"
+                    />
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <Label htmlFor="shuffle">Shuffle Questions</Label>
                   <Switch
@@ -283,6 +303,28 @@ const CreateQuiz = () => {
                     onCheckedChange={setShowResultsImmediately}
                   />
                 </div>
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password-protected">Password Protected</Label>
+                  <Switch
+                    id="password-protected"
+                    checked={passwordProtected}
+                    onCheckedChange={setPasswordProtected}
+                  />
+                </div>
+
+                {passwordProtected && (
+                  <div className="space-y-2">
+                    <Label htmlFor="access-password">Access Password</Label>
+                    <Input
+                      id="access-password"
+                      type="password"
+                      value={accessPassword}
+                      onChange={(e) => setAccessPassword(e.target.value)}
+                      placeholder="Enter quiz password"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* SEB Settings */}

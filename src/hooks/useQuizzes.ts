@@ -11,6 +11,8 @@ export interface Quiz {
   allow_multiple_attempts: boolean;
   shuffle_questions: boolean;
   show_results_immediately: boolean;
+  password_protected: boolean;
+  access_password: string | null;
   require_seb: boolean;
   seb_config_key: string | null;
   seb_browser_exam_key: string | null;

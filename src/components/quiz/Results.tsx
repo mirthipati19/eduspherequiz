@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import ExportResults from "./ExportResults";
 
 interface QuizResult {
   id: string;
@@ -102,12 +103,15 @@ const Results = () => {
       setResults(transformedResults);
 
       // Get unique quiz titles for filter dropdown
-      const uniqueQuizzes = Array.from(
-        new Set(transformedResults.map(r => r.quizTitle))
-      ).map(title => ({ 
-        id: title, 
-        title 
-      }));
+      const uniqueQuizzes = attempts
+        ?.map(a => ({
+          id: a.quizzes.id,
+          title: a.quizzes.title
+        }))
+        .filter((quiz, index, self) => 
+          index === self.findIndex(q => q.id === quiz.id)
+        ) || [];
+      
       setQuizzes(uniqueQuizzes);
 
     } catch (error) {
@@ -122,7 +126,7 @@ const Results = () => {
     const matchesSearch = 
       result.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       result.quizTitle.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesQuiz = filterQuiz === "all" || result.quizTitle === filterQuiz;
+    const matchesQuiz = filterQuiz === "all" || result.quizTitle === quizzes.find(q => q.id === filterQuiz)?.title;
     const matchesStatus = filterStatus === "all" || result.status === filterStatus;
     
     return matchesSearch && matchesQuiz && matchesStatus;
@@ -175,16 +179,6 @@ const Results = () => {
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Quiz Results</h2>
           <p className="text-muted-foreground">Monitor student performance and export reports</p>
-        </div>
-        <div className="flex items-center space-x-3">
-          <Button variant="outline">
-            <Calendar className="h-4 w-4 mr-2" />
-            Date Range
-          </Button>
-          <Button variant="academic" className="shadow-elegant">
-            <Download className="h-4 w-4 mr-2" />
-            Export Results
-          </Button>
         </div>
       </div>
 
@@ -249,6 +243,9 @@ const Results = () => {
         </Card>
       </div>
 
+      {/* Export Results */}
+      <ExportResults quizzes={quizzes} />
+
       {/* Filters */}
       <Card className="shadow-card">
         <CardContent className="p-4">
@@ -270,7 +267,7 @@ const Results = () => {
               <SelectContent>
                 <SelectItem value="all">All Quizzes</SelectItem>
                 {quizzes.map(quiz => (
-                  <SelectItem key={quiz.id} value={quiz.title}>
+                  <SelectItem key={quiz.id} value={quiz.id}>
                     {quiz.title}
                   </SelectItem>
                 ))}

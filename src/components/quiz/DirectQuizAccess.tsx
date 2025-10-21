@@ -96,39 +96,41 @@ const DirectQuizAccess = () => {
     setIsStarting(true);
 
     try {
-      // Check attempt limits if not allowing multiple attempts
-      if (!quiz.allow_multiple_attempts || (quiz.max_attempts && quiz.max_attempts > 0)) {
-        const { data: existingAttempts, error: countError } = await supabase
-          .from('quiz_attempts')
-          .select('id, status')
-          .eq('quiz_id', quiz.id)
-          .eq('student_email', studentEmail.trim());
+      // Check for existing attempts by email
+      const { data: existingAttempts, error: countError } = await supabase
+        .from('quiz_attempts')
+        .select('id, status')
+        .eq('quiz_id', quiz.id)
+        .eq('student_email', studentEmail.trim().toLowerCase());
 
-        if (countError) throw countError;
+      if (countError) throw countError;
 
-        if (existingAttempts && existingAttempts.length > 0) {
-          if (!quiz.allow_multiple_attempts) {
-            setError("You have already attempted this quiz. Multiple attempts are not allowed.");
-            setIsStarting(false);
-            return;
-          }
+      // Check if student already submitted an attempt
+      const submittedAttempts = existingAttempts?.filter(a => a.status === 'submitted' || a.status === 'graded') || [];
+      
+      if (submittedAttempts.length > 0) {
+        // If multiple attempts not allowed, block completely
+        if (!quiz.allow_multiple_attempts) {
+          setError("You have already attempted this quiz and cannot attempt it again.");
+          setIsStarting(false);
+          return;
+        }
 
-          const completedAttempts = existingAttempts.filter(a => a.status === 'graded' || a.status === 'submitted');
-          if (quiz.max_attempts && completedAttempts.length >= quiz.max_attempts) {
-            setError(`You have reached the maximum number of attempts (${quiz.max_attempts}) for this quiz.`);
-            setIsStarting(false);
-            return;
-          }
+        // If max attempts is set, check limit
+        if (quiz.max_attempts && submittedAttempts.length >= quiz.max_attempts) {
+          setError(`You have reached the maximum number of attempts (${quiz.max_attempts}) for this quiz.`);
+          setIsStarting(false);
+          return;
         }
       }
 
-      // Create anonymous quiz attempt
+      // Create anonymous quiz attempt (normalize email to lowercase)
       const { data: attempt, error: attemptError } = await supabase
         .from('quiz_attempts')
         .insert({
           quiz_id: quiz.id,
           student_name: studentName.trim(),
-          student_email: studentEmail.trim(),
+          student_email: studentEmail.trim().toLowerCase(),
           access_token: crypto.randomUUID(), // Generate unique access token
           status: 'in_progress'
         })
