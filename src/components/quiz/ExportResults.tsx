@@ -13,7 +13,7 @@ interface ExportResultsProps {
 }
 
 const ExportResults = ({ quizzes }: ExportResultsProps) => {
-  const [selectedQuizId, setSelectedQuizId] = useState<string>("");
+  const [selectedQuizId, setSelectedQuizId] = useState<string>("all");
   const [studentEmail, setStudentEmail] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -25,25 +25,41 @@ const ExportResults = ({ quizzes }: ExportResultsProps) => {
     setExporting(true);
 
     try {
+      // Get current user to verify ownership
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please log in to export results");
+        return;
+      }
+
+      // Get quiz IDs for user's quizzes (or filtered quiz)
+      let quizIds: string[] = [];
+      if (selectedQuizId && selectedQuizId !== 'all') {
+        quizIds = [selectedQuizId];
+      } else {
+        quizIds = quizzes.map(q => q.id);
+      }
+
+      if (quizIds.length === 0) {
+        toast.error("No quizzes available");
+        return;
+      }
+
       // Build query
       let query = supabase
         .from('quiz_attempts')
         .select(`
           id,
+          quiz_id,
           student_name,
           student_email,
           score,
           max_score,
           submitted_at,
-          status,
-          quizzes!inner(id, title)
+          status
         `)
+        .in('quiz_id', quizIds)
         .in('status', ['submitted', 'graded']);
-
-      // Apply filters
-      if (selectedQuizId) {
-        query = query.eq('quiz_id', selectedQuizId);
-      }
 
       if (studentEmail) {
         query = query.ilike('student_email', `%${studentEmail}%`);
@@ -74,6 +90,12 @@ const ExportResults = ({ quizzes }: ExportResultsProps) => {
         return;
       }
 
+      // Create quiz ID to title map
+      const quizMap = quizzes.reduce((acc, quiz) => {
+        acc[quiz.id] = quiz.title;
+        return acc;
+      }, {} as Record<string, string>);
+
       // Fetch answers for each attempt
       const attemptsWithAnswers = await Promise.all(
         attempts.map(async (attempt) => {
@@ -83,13 +105,33 @@ const ExportResults = ({ quizzes }: ExportResultsProps) => {
               answer_text,
               is_correct,
               points_earned,
-              questions!inner(question_text, correct_answer)
+              question_id
             `)
             .eq('attempt_id', attempt.id);
 
+          // Get question details separately
+          const questionIds = answers?.map(a => a.question_id) || [];
+          let questionMap: Record<string, any> = {};
+          
+          if (questionIds.length > 0) {
+            const { data: questions } = await supabase
+              .from('questions')
+              .select('id, question_text, correct_answer')
+              .in('id', questionIds);
+            
+            questionMap = questions?.reduce((acc, q) => {
+              acc[q.id] = q;
+              return acc;
+            }, {} as Record<string, any>) || {};
+          }
+
           return {
             ...attempt,
-            answers: answers || []
+            quiz_title: quizMap[attempt.quiz_id] || 'Unknown Quiz',
+            answers: answers?.map(a => ({
+              ...a,
+              questions: questionMap[a.question_id]
+            })) || []
           };
         })
       );
@@ -119,7 +161,7 @@ const ExportResults = ({ quizzes }: ExportResultsProps) => {
         const baseInfo = [
           `"${attempt.student_name}"`,
           `"${attempt.student_email}"`,
-          `"${(attempt.quizzes as any).title}"`,
+          `"${attempt.quiz_title}"`,
           attempt.score || 0,
           attempt.max_score || 0,
           attempt.max_score ? ((attempt.score || 0) / attempt.max_score * 100).toFixed(2) + "%" : "N/A",
@@ -180,7 +222,7 @@ const ExportResults = ({ quizzes }: ExportResultsProps) => {
                 <SelectValue placeholder="All Quizzes" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Quizzes</SelectItem>
+                <SelectItem value="all">All Quizzes</SelectItem>
                 {quizzes.map((quiz) => (
                   <SelectItem key={quiz.id} value={quiz.id}>
                     {quiz.title}

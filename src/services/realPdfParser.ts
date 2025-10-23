@@ -47,109 +47,76 @@ export class RealPDFParser {
 
       const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
       const questions: ParsedQuestion[] = [];
+      let allText = '';
       
-      // Parse each page looking for questions
-      for (let pageNum = 2; pageNum <= pdf.numPages; pageNum++) {
+      // Extract all text from PDF first
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
         const pageText = textContent.items
           .filter((item): item is any => 'str' in item)
           .map((item) => item.str)
           .join(' ');
+        allText += pageText + '\n';
+      }
 
-        // Look for question pattern and extract content more precisely
-        const lines = pageText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      // Pattern to match questions: Number. Question text A. option B. option C. option D. option
+      // More flexible regex that handles multiline and various formatting
+      const questionPattern = /(\d+)\.\s*([^A-D]*?)\s*A\.\s*([^B]*?)\s*B\.\s*([^C]*?)\s*C\.\s*([^D]*?)\s*D\.\s*([^0-9]*?)(?=\d+\.|$)/gs;
+      
+      let match;
+      while ((match = questionPattern.exec(allText)) !== null) {
+        const [, questionNum, questionText, optionA, optionB, optionC, optionD] = match;
         
-        // Find question number at start of page
-        let questionNum: number | null = null;
-        let questionText = '';
-        let questionStartIndex = -1;
+        const cleanText = (text: string) => text.trim().replace(/\s+/g, ' ');
         
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          const questionMatch = line.match(/^\s*(\d+)\.\s*(.*)$/);
-          if (questionMatch) {
-            questionNum = parseInt(questionMatch[1]);
-            questionText = questionMatch[2].trim();
-            questionStartIndex = i;
-            break;
+        const cleanQuestionText = cleanText(questionText);
+        const options = [
+          cleanText(optionA),
+          cleanText(optionB),
+          cleanText(optionC),
+          cleanText(optionD)
+        ];
+
+        // Validate we got good data
+        if (!cleanQuestionText || options.some(opt => !opt || opt.length < 1)) {
+          console.warn(`Skipping question ${questionNum} - incomplete data`);
+          continue;
+        }
+
+        // Try to find answer in text (look for "Answer: A" or "Correct: B" etc)
+        const answerPattern = new RegExp(`(?:Answer|Correct)\\s*:?\\s*([A-D])`, 'i');
+        const answerMatch = allText.substring(match.index, match.index + match[0].length + 100).match(answerPattern);
+        
+        let correctAnswer = '';
+        if (answerMatch) {
+          const answerLetter = answerMatch[1].toUpperCase();
+          const answerIndex = answerLetter.charCodeAt(0) - 'A'.charCodeAt(0);
+          if (answerIndex >= 0 && answerIndex < options.length) {
+            correctAnswer = options[answerIndex];
           }
         }
-        
-        if (!questionNum || questionStartIndex === -1) continue;
-        
-        // Collect question text until we hit options (A., B., C., D.) or next question
-        for (let i = questionStartIndex + 1; i < lines.length; i++) {
-          const line = lines[i];
-          // Stop if we hit options or another question number
-          if (line.match(/^[A-D]\.\s/) || line.match(/^\s*\d+\.\s/)) {
-            break;
-          }
-          questionText += ' ' + line;
-        }
-        
-        questionText = questionText.trim();
-        if (!questionText) continue;
-
-        // Extract options A, B, C, D - more precise matching
-        const options: string[] = [];
-        for (const letter of ['A', 'B', 'C', 'D']) {
-          const optionRegex = new RegExp(`${letter}\\\.\\s*([^A-D]*?)(?=${letter === 'D' ? '$' : '[A-D]\\.|$'})`, 's');
-          const optionMatch = pageText.match(optionRegex);
-          if (optionMatch) {
-            const cleanOption = optionMatch[1].trim().replace(/\s+/g, ' ');
-            if (cleanOption && !cleanOption.match(/^\d+\./)) { // Don't include next question numbers
-              options.push(cleanOption);
-            }
-          }
-        }
-
-        if (options.length !== 4) {
-          console.warn(`Question ${questionNum}: Expected 4 options, found ${options.length}`, options);
-          // Continue with available options or use fallback
-        }
-
-        // Render page as image (reduced scale for faster processing)
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d')!;
-        const viewport = page.getViewport({ scale: 1.0 });
-        
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-          canvas: canvas
-        }).promise;
-
-        // Convert canvas to blob
-        const imageBlob = await new Promise<Blob>((resolve) => {
-          canvas.toBlob((blob) => resolve(blob!), 'image/png', 0.9);
-        });
 
         questions.push({
-          question_text: questionText,
+          question_text: cleanQuestionText,
           question_type: 'multiple-choice',
-          options: options.length === 4 ? options : ['A', 'B', 'C', 'D'], // Fallback
-          correct_answer: '', // Empty string to satisfy NOT NULL constraint
-          points: 2,
-          order_index: questionNum - 1,
-          has_image: true,
-          image_data: {
-            blob: imageBlob,
-            filename: `question_${questionNum}.png`
-          }
+          options: options,
+          correct_answer: correctAnswer || options[0], // Default to first option if no answer found
+          points: 1,
+          order_index: parseInt(questionNum) - 1,
+          has_image: false
         });
       }
 
       if (questions.length === 0) {
-        throw new Error('No questions detected in the PDF. Ensure it has selectable text and clearly labeled options (A., B., C., D.).');
+        throw new Error('No questions detected in the PDF. Ensure the PDF contains questions in format: "1. Question text A. option B. option C. option D. option"');
       }
 
+      console.log(`Successfully extracted ${questions.length} questions from PDF`);
+
       return {
-        title: quizTitle || "Dummy-2 (Dallas ISD)",
-        description: quizDescription || "Imported geometry assessment from Dallas ISD",
+        title: quizTitle || "Imported Quiz",
+        description: quizDescription || "Quiz imported from PDF",
         duration: 90,
         questions: questions.sort((a, b) => a.order_index - b.order_index)
       };
