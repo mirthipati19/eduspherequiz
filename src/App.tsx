@@ -8,6 +8,7 @@ import AdminDashboard from "@/components/quiz/AdminDashboard";
 import StudentDashboard from "@/components/quiz/StudentDashboard";
 import QuizTaking from "@/components/quiz/QuizTaking";
 import QuizResults from "@/components/quiz/QuizResults";
+import QuizResultDetail from "@/components/quiz/QuizResultDetail";
 import DirectQuizAccess from "@/components/quiz/DirectQuizAccess";
 import AuthPage from "@/components/auth/AuthPage";
 import NotFound from "./pages/NotFound";
@@ -26,6 +27,7 @@ const App = () => (
               <Route path="/" element={<Navigate to="/admin" replace />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/admin/*" element={<AdminDashboard />} />
+              <Route path="/admin/results/:attemptId" element={<QuizResultDetail />} />
               <Route path="/student" element={<StudentDashboard />} />
               <Route path="/quiz/:quizId/direct" element={<DirectQuizAccess />} />
               <Route path="/quiz/:quizId/take" element={<QuizTaking />} />

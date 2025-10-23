@@ -14,6 +14,7 @@ import { useQuizzes, CreateQuizData } from "@/hooks/useQuizzes";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import QuizImport from "./QuizImport";
 
 interface LocalQuestion {
   id: string;
@@ -194,10 +195,11 @@ const CreateQuiz = () => {
           </Link>
           <div>
             <h2 className="text-2xl font-semibold text-foreground">Create New Quiz</h2>
-            <p className="text-muted-foreground">Build your quiz with questions and settings</p>
+            <p className="text-muted-foreground">Build your quiz manually or upload from PDF</p>
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <QuizImport onImportComplete={(quizId) => navigate("/admin/quizzes")} />
           <Button variant="outline" disabled>
             <Eye className="h-4 w-4 mr-2" />
             Preview
