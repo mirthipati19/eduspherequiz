@@ -47,11 +47,29 @@ const Results = () => {
         return;
       }
 
-      // Fetch quiz attempts with related quiz data
+      // First, fetch quizzes created by this user
+      const { data: userQuizzes, error: quizzesError } = await supabase
+        .from('quizzes')
+        .select('id, title')
+        .eq('created_by', user.id);
+
+      if (quizzesError) throw quizzesError;
+
+      if (!userQuizzes || userQuizzes.length === 0) {
+        setResults([]);
+        setQuizzes([]);
+        setLoading(false);
+        return;
+      }
+
+      const quizIds = userQuizzes.map(q => q.id);
+
+      // Fetch quiz attempts for those quizzes
       const { data: attempts, error: attemptsError } = await supabase
         .from('quiz_attempts')
         .select(`
           id,
+          quiz_id,
           status,
           score,
           max_score,
@@ -59,14 +77,9 @@ const Results = () => {
           submitted_at,
           student_name,
           student_email,
-          user_id,
-          quizzes!inner (
-            id,
-            title,
-            created_by
-          )
+          user_id
         `)
-        .eq('quizzes.created_by', user.id)
+        .in('quiz_id', quizIds)
         .order('submitted_at', { ascending: false });
 
       if (attemptsError) throw attemptsError;
@@ -87,12 +100,18 @@ const Results = () => {
         }, {} as Record<string, string>) || {};
       }
 
+      // Create a map of quiz IDs to titles
+      const quizMap = userQuizzes.reduce((acc, quiz) => {
+        acc[quiz.id] = quiz.title;
+        return acc;
+      }, {} as Record<string, string>);
+
       // Transform data to match component interface
       const transformedResults: QuizResult[] = attempts?.map(attempt => ({
         id: attempt.id,
         studentName: attempt.student_name || (attempt.user_id ? profiles[attempt.user_id] : null) || 'Anonymous',
         studentEmail: attempt.student_email || 'N/A',
-        quizTitle: attempt.quizzes.title,
+        quizTitle: quizMap[attempt.quiz_id] || 'Unknown Quiz',
         score: attempt.score || 0,
         totalPoints: attempt.max_score || 0,
         timeSpent: Math.floor((attempt.time_spent || 0) / 60), // Convert seconds to minutes
@@ -101,18 +120,7 @@ const Results = () => {
       })) || [];
 
       setResults(transformedResults);
-
-      // Get unique quiz titles for filter dropdown
-      const uniqueQuizzes = attempts
-        ?.map(a => ({
-          id: a.quizzes.id,
-          title: a.quizzes.title
-        }))
-        .filter((quiz, index, self) => 
-          index === self.findIndex(q => q.id === quiz.id)
-        ) || [];
-      
-      setQuizzes(uniqueQuizzes);
+      setQuizzes(userQuizzes);
 
     } catch (error) {
       console.error('Error fetching results:', error);

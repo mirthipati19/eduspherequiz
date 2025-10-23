@@ -64,26 +64,34 @@ const QuizResultDetail = () => {
         .from('quiz_attempts')
         .select(`
           id,
+          quiz_id,
           score,
           max_score,
           time_spent,
           submitted_at,
           student_name,
-          student_email,
-          quizzes!inner (
-            id,
-            title,
-            description,
-            created_by
-          )
+          student_email
         `)
         .eq('id', attemptId)
-        .eq('quizzes.created_by', user.id)
         .single();
 
       if (attemptError) throw attemptError;
       if (!attempt) {
         toast.error("Quiz attempt not found");
+        navigate('/admin/results');
+        return;
+      }
+
+      // Verify user owns this quiz
+      const { data: quiz, error: quizError } = await supabase
+        .from('quizzes')
+        .select('id, title, description, created_by')
+        .eq('id', attempt.quiz_id)
+        .eq('created_by', user.id)
+        .single();
+
+      if (quizError || !quiz) {
+        toast.error("You don't have permission to view this result");
         navigate('/admin/results');
         return;
       }
@@ -137,8 +145,8 @@ const QuizResultDetail = () => {
         submitted_at: attempt.submitted_at,
         student_name: attempt.student_name,
         student_email: attempt.student_email,
-        quiz_title: attempt.quizzes.title,
-        quiz_description: attempt.quizzes.description,
+        quiz_title: quiz.title,
+        quiz_description: quiz.description,
         answers: transformedAnswers
       });
 
