@@ -170,15 +170,26 @@ const Results = () => {
     });
   };
 
-  // Stats calculations
-  const completedResults = results.filter(r => r.status === "completed");
-  const averageScore = completedResults.length > 0 
-    ? completedResults.reduce((sum, r) => sum + ((r.score / r.totalPoints) * 100), 0) / completedResults.length 
-    : 0;
-  const totalAttempts = results.length;
-  const averageTime = completedResults.length > 0
-    ? completedResults.reduce((sum, r) => sum + r.timeSpent, 0) / completedResults.length
-    : 0;
+  // Stats calculations - Calculate dynamically from filtered results
+  const stats = {
+    avgScore: filteredResults.length > 0 
+      ? Math.round((filteredResults.reduce((acc, r) => acc + (r.score / r.totalPoints) * 100, 0) / filteredResults.length) * 10) / 10
+      : 0,
+    totalAttempts: filteredResults.length,
+    avgTime: filteredResults.length > 0 
+      ? Math.round(filteredResults.reduce((acc, r) => acc + r.timeSpent, 0) / filteredResults.length)
+      : 0,
+    completionRate: results.length > 0 
+      ? Math.round((results.filter(r => r.status === 'completed').length / results.length) * 100)
+      : 0,
+    highestScore: filteredResults.length > 0
+      ? Math.max(...filteredResults.map(r => (r.score / r.totalPoints) * 100))
+      : 0,
+    lowestScore: filteredResults.length > 0
+      ? Math.min(...filteredResults.map(r => (r.score / r.totalPoints) * 100))
+      : 0,
+    inProgress: results.filter(r => r.status === 'in-progress').length
+  };
 
   return (
     <div className="space-y-6">
@@ -200,7 +211,10 @@ const Results = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Average Score</p>
-                <p className="text-2xl font-bold text-foreground">{averageScore.toFixed(1)}%</p>
+                <p className="text-2xl font-bold text-foreground">{stats.avgScore.toFixed(1)}%</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Range: {stats.lowestScore.toFixed(0)}% - {stats.highestScore.toFixed(0)}%
+                </p>
               </div>
             </div>
           </CardContent>
@@ -214,7 +228,10 @@ const Results = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Attempts</p>
-                <p className="text-2xl font-bold text-foreground">{totalAttempts}</p>
+                <p className="text-2xl font-bold text-foreground">{stats.totalAttempts}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.inProgress} in progress
+                </p>
               </div>
             </div>
           </CardContent>
@@ -228,7 +245,10 @@ const Results = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg. Time</p>
-                <p className="text-2xl font-bold text-foreground">{averageTime.toFixed(0)}m</p>
+                <p className="text-2xl font-bold text-foreground">{stats.avgTime}m</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Per completed attempt
+                </p>
               </div>
             </div>
           </CardContent>
@@ -242,8 +262,9 @@ const Results = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Completion Rate</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {((completedResults.length / totalAttempts) * 100).toFixed(0)}%
+                <p className="text-2xl font-bold text-foreground">{stats.completionRate}%</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {results.filter(r => r.status === 'completed').length} / {results.length} submitted
                 </p>
               </div>
             </div>

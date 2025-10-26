@@ -24,6 +24,9 @@ interface LocalQuestion {
   correctAnswer: number;
   hasImage: boolean;
   points: number;
+  // Short answer fields
+  keywords?: string[];
+  keywordWeightage?: Record<string, number>;
 }
 
 const CreateQuiz = () => {
@@ -152,7 +155,9 @@ const CreateQuiz = () => {
             points: question.points,
             order_index: i + 1,
             has_image: question.hasImage,
-            image_url: null // TODO: Handle image uploads later
+            image_url: null,
+            expected_keywords: question.type === 'short-answer' ? question.keywords : null,
+            keyword_weightage: question.type === 'short-answer' ? question.keywordWeightage : null
           };
           
           console.log("Creating question:", questionData);
@@ -484,12 +489,61 @@ const CreateQuiz = () => {
                   )}
 
                   {question.type === "short-answer" && (
-                    <div className="space-y-2">
-                      <Label>Answer Guidelines (for manual grading)</Label>
-                      <Textarea 
-                        placeholder="Provide key points that should be included in the answer..."
-                        rows={3}
-                      />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Expected Keywords/Phrases (one per line)</Label>
+                        <Textarea 
+                          value={(question.keywords || []).join('\n')}
+                          onChange={(e) => {
+                            const keywords = e.target.value.split('\n').filter(k => k.trim());
+                            updateLocalQuestion(question.id, "keywords", keywords);
+                            
+                            // Initialize weightage for new keywords
+                            const newWeightage = { ...(question.keywordWeightage || {}) };
+                            keywords.forEach(keyword => {
+                              if (!newWeightage[keyword]) {
+                                newWeightage[keyword] = 1;
+                              }
+                            });
+                            updateLocalQuestion(question.id, "keywordWeightage", newWeightage);
+                          }}
+                          placeholder="Enter expected keywords or phrases, one per line..."
+                          rows={4}
+                        />
+                      </div>
+                      
+                      {question.keywords && question.keywords.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Scoring Weightage per Keyword</Label>
+                          <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {question.keywords.map((keyword, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <span className="text-sm flex-1 truncate">{keyword}</span>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={question.keywordWeightage?.[keyword] || 1}
+                                  onChange={(e) => {
+                                    const newWeightage = {
+                                      ...(question.keywordWeightage || {}),
+                                      [keyword]: parseFloat(e.target.value) || 1
+                                    };
+                                    updateLocalQuestion(question.id, "keywordWeightage", newWeightage);
+                                  }}
+                                  className="w-20"
+                                />
+                                <span className="text-sm text-muted-foreground">pts</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <p className="text-xs text-muted-foreground">
+                        Student answers will be auto-graded based on keyword matches. 
+                        Matching is case-insensitive and punctuation-agnostic.
+                      </p>
                     </div>
                   )}
                 </CardContent>

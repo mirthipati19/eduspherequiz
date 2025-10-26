@@ -60,33 +60,48 @@ export class RealPDFParser {
         allText += pageText + '\n';
       }
 
-      // Pattern to match questions: Number. Question text A. option B. option C. option D. option
-      // More flexible regex that handles multiline and various formatting
-      const questionPattern = /(\d+)\.\s*([^A-D]*?)\s*A\.\s*([^B]*?)\s*B\.\s*([^C]*?)\s*C\.\s*([^D]*?)\s*D\.\s*([^0-9]*?)(?=\d+\.|$)/gs;
+      // Enhanced pattern to match questions with format:
+      // 1. Question text
+      //  A. option
+      //  B. option
+      //  C. option
+      //  D. option
+      //  Answer: A
       
-      let match;
-      while ((match = questionPattern.exec(allText)) !== null) {
-        const [, questionNum, questionText, optionA, optionB, optionC, optionD] = match;
+      // First, split by question numbers to handle line breaks better
+      const questionBlocks = allText.split(/(?=^\d+\.\s)/m);
+      
+      for (const block of questionBlocks) {
+        if (!block.trim()) continue;
         
-        const cleanText = (text: string) => text.trim().replace(/\s+/g, ' ');
+        // Extract question number
+        const numMatch = block.match(/^(\d+)\./);
+        if (!numMatch) continue;
         
-        const cleanQuestionText = cleanText(questionText);
-        const options = [
-          cleanText(optionA),
-          cleanText(optionB),
-          cleanText(optionC),
-          cleanText(optionD)
-        ];
-
+        const questionNum = numMatch[1];
+        
+        // Extract question text (everything between number and first option)
+        const questionTextMatch = block.match(/^\d+\.\s*(.+?)(?=\s*[A-D]\.|$)/s);
+        if (!questionTextMatch) continue;
+        
+        const questionText = questionTextMatch[1].trim().replace(/\s+/g, ' ');
+        
+        // Extract options A-D (more flexible with whitespace and line breaks)
+        const optionA = block.match(/[A][\.\)]\s*(.+?)(?=\s*[B][\.\)]|Answer|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
+        const optionB = block.match(/[B][\.\)]\s*(.+?)(?=\s*[C][\.\)]|Answer|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
+        const optionC = block.match(/[C][\.\)]\s*(.+?)(?=\s*[D][\.\)]|Answer|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
+        const optionD = block.match(/[D][\.\)]\s*(.+?)(?=\s*(?:Answer|Correct|\d+\.)|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
+        
+        const options = [optionA, optionB, optionC, optionD];
+        
         // Validate we got good data
-        if (!cleanQuestionText || options.some(opt => !opt || opt.length < 1)) {
+        if (!questionText || options.some(opt => !opt || opt.length < 1)) {
           console.warn(`Skipping question ${questionNum} - incomplete data`);
           continue;
         }
-
-        // Try to find answer in text (look for "Answer: A" or "Correct: B" etc)
-        const answerPattern = new RegExp(`(?:Answer|Correct)\\s*:?\\s*([A-D])`, 'i');
-        const answerMatch = allText.substring(match.index, match.index + match[0].length + 100).match(answerPattern);
+        
+        // Extract answer (look for "Answer: A" or "Answer:A" or "Correct: B")
+        const answerMatch = block.match(/(?:Answer|Correct)\s*:?\s*([A-D])/i);
         
         let correctAnswer = '';
         if (answerMatch) {
@@ -96,9 +111,9 @@ export class RealPDFParser {
             correctAnswer = options[answerIndex];
           }
         }
-
+        
         questions.push({
-          question_text: cleanQuestionText,
+          question_text: questionText,
           question_type: 'multiple-choice',
           options: options,
           correct_answer: correctAnswer || options[0], // Default to first option if no answer found

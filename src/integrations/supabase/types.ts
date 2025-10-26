@@ -18,31 +18,37 @@ export type Database = {
         Row: {
           answer_text: string | null
           attempt_id: string
+          auto_graded_score: number | null
           created_at: string
           id: string
           is_correct: boolean | null
           points_earned: number | null
           question_id: string
+          requires_manual_review: boolean | null
           updated_at: string
         }
         Insert: {
           answer_text?: string | null
           attempt_id: string
+          auto_graded_score?: number | null
           created_at?: string
           id?: string
           is_correct?: boolean | null
           points_earned?: number | null
           question_id: string
+          requires_manual_review?: boolean | null
           updated_at?: string
         }
         Update: {
           answer_text?: string | null
           attempt_id?: string
+          auto_graded_score?: number | null
           created_at?: string
           id?: string
           is_correct?: boolean | null
           points_earned?: number | null
           question_id?: string
+          requires_manual_review?: boolean | null
           updated_at?: string
         }
         Relationships: [
@@ -99,9 +105,11 @@ export type Database = {
         Row: {
           correct_answer: string
           created_at: string
+          expected_keywords: Json | null
           has_image: boolean | null
           id: string
           image_url: string | null
+          keyword_weightage: Json | null
           options: Json | null
           order_index: number
           points: number
@@ -113,9 +121,11 @@ export type Database = {
         Insert: {
           correct_answer: string
           created_at?: string
+          expected_keywords?: Json | null
           has_image?: boolean | null
           id?: string
           image_url?: string | null
+          keyword_weightage?: Json | null
           options?: Json | null
           order_index: number
           points?: number
@@ -127,9 +137,11 @@ export type Database = {
         Update: {
           correct_answer?: string
           created_at?: string
+          expected_keywords?: Json | null
           has_image?: boolean | null
           id?: string
           image_url?: string | null
+          keyword_weightage?: Json | null
           options?: Json | null
           order_index?: number
           points?: number
@@ -302,10 +314,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      generate_access_token: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      generate_access_token: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

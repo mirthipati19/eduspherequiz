@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { Clock, AlertCircle, ChevronLeft, ChevronRight, Flag, Check, ZoomIn, Eye } from "lucide-react";
+import { Clock, AlertCircle, ChevronLeft, ChevronRight, Flag, Check, ZoomIn, Eye, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -13,6 +13,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuizzes } from "@/hooks/useQuizzes";
 import { useQuizProgress } from "@/hooks/useQuizProgress";
+import { useSEBValidation } from "@/hooks/useSEBValidation";
+import { gradeShortAnswer } from "@/services/autoGrading";
 import ImageZoom from "./ImageZoom";
 import { toast } from "sonner";
 
@@ -25,6 +27,9 @@ interface Question {
   image_url: string | null;
   points: number;
   order_index: number;
+  correct_answer?: string | null;
+  expected_keywords?: string[] | null;
+  keyword_weightage?: Record<string, number> | null;
 }
 
 interface QuizData {
@@ -34,6 +39,7 @@ interface QuizData {
   duration: number;
   shuffle_questions: boolean;
   show_results_immediately: boolean;
+  require_seb?: boolean;
   questions: Question[];
 }
 
@@ -63,11 +69,17 @@ const QuizTaking = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
+  const [requiresSEB, setRequiresSEB] = useState(false);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { progress, saveProgress, clearProgress } = useQuizProgress(
     isPreview ? null : attemptId, 
     isPreview ? null : quizId || null
+  );
+
+  // SEB Validation (only if SEB is required)
+  const { isValid: sebValid, loading: sebLoading, error: sebError } = useSEBValidation(
+    (requiresSEB && !isPreview && quizId) ? quizId : ''
   );
 
   // Load saved progress if resuming
@@ -135,10 +147,10 @@ const QuizTaking = () => {
 
   const fetchQuizData = async () => {
     try {
-      // Fetch quiz details
+      // Fetch quiz details including SEB requirement
       const { data: quiz, error: quizError } = await supabase
         .from('quizzes')
-        .select('id, title, description, duration, status, shuffle_questions, show_results_immediately')
+        .select('id, title, description, duration, status, shuffle_questions, show_results_immediately, require_seb')
         .eq('id', quizId)
         .maybeSingle();
 
@@ -150,6 +162,9 @@ const QuizTaking = () => {
         return;
       }
 
+      // Set SEB requirement flag
+      setRequiresSEB(quiz.require_seb || false);
+
       // Check if quiz is published or if user is the creator/preview mode
       if (quiz.status !== 'published' && !isPreview) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -160,7 +175,7 @@ const QuizTaking = () => {
         }
       }
 
-      // Fetch questions
+      // Fetch questions with all necessary fields
       const { data: questions, error: questionsError } = await supabase
         .from('questions')
         .select('*')
@@ -171,7 +186,9 @@ const QuizTaking = () => {
 
       let processedQuestions = questions?.map(q => ({
         ...q,
-        options: q.options ? (q.options as string[]) : null
+        options: q.options ? (q.options as string[]) : null,
+        expected_keywords: q.expected_keywords ? (q.expected_keywords as string[]) : null,
+        keyword_weightage: q.keyword_weightage ? (q.keyword_weightage as Record<string, number>) : null
       })) || [];
 
       // Shuffle questions if enabled (but not in preview mode to maintain consistency)
@@ -240,14 +257,40 @@ const QuizTaking = () => {
     }
   };
 
-  if (loading) {
+  if (loading || sebLoading) {
     return (
       <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
         <Card className="w-full max-w-md shadow-card">
           <CardContent className="p-8">
             <div className="text-center">
               <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Loading quiz...</p>
+              <p className="text-muted-foreground">
+                {sebLoading ? "Validating Safe Exam Browser..." : "Loading quiz..."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show SEB error if validation failed
+  if (requiresSEB && !isPreview && sebError) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <Card className="w-full max-w-md shadow-card border-destructive">
+          <CardContent className="p-8">
+            <div className="text-center space-y-4">
+              <Shield className="h-16 w-16 text-destructive mx-auto" />
+              <h2 className="text-xl font-semibold text-foreground">Safe Exam Browser Required</h2>
+              <p className="text-muted-foreground">{sebError}</p>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  This quiz requires Safe Exam Browser. Please open the quiz using the provided .seb configuration file.
+                </AlertDescription>
+              </Alert>
+              <Button variant="outline" onClick={() => navigate("/")}>Go Home</Button>
             </div>
           </CardContent>
         </Card>
@@ -343,34 +386,57 @@ const QuizTaking = () => {
       let totalScore = 0;
       let maxScore = 0;
       
-      // First, fetch questions with correct answers for grading
+      // First, fetch questions with correct answers and keywords for grading
       const { data: questionsWithAnswers, error: questionsError } = await supabase
         .from('questions')
-        .select('id, correct_answer, points, question_type')
+        .select('id, correct_answer, points, question_type, expected_keywords, keyword_weightage')
         .eq('quiz_id', quizId);
 
       if (questionsError) throw questionsError;
 
-      // Save all answers with grading
+      // Save all answers with grading (including auto-grading for short answers)
       const answerData = Object.entries(answers).map(([questionId, answer]) => {
         const question = questionsWithAnswers?.find(q => q.id === questionId);
         let isCorrect = false;
         let pointsEarned = 0;
+        let autoGradedScore: number | null = null;
+        let requiresManualReview = false;
 
         if (question) {
           maxScore += question.points;
           
           if (question.question_type === 'multiple-choice') {
             isCorrect = answer === question.correct_answer;
+            pointsEarned = isCorrect ? question.points : 0;
           } else if (question.question_type === 'fill-blank') {
             // Case-insensitive comparison for fill-in-the-blank
             isCorrect = answer.toLowerCase().trim() === question.correct_answer?.toLowerCase().trim();
-          } else {
-            // For short-answer, mark as needing manual review
-            isCorrect = false;
+            pointsEarned = isCorrect ? question.points : 0;
+          } else if (question.question_type === 'short-answer') {
+            // Auto-grade short answer using keyword matching
+            if (question.expected_keywords && question.keyword_weightage) {
+              const gradingResult = gradeShortAnswer(
+                answer,
+                question.expected_keywords as string[],
+                question.keyword_weightage as Record<string, number>,
+                question.points
+              );
+              
+              autoGradedScore = gradingResult.score;
+              pointsEarned = gradingResult.score;
+              
+              // Mark for manual review if score is in middle range (40-60%)
+              requiresManualReview = gradingResult.percentage >= 40 && gradingResult.percentage <= 60;
+              
+              // Consider partially correct if got some points
+              isCorrect = gradingResult.score > 0;
+            } else {
+              // No keywords defined, mark for manual review
+              requiresManualReview = true;
+              isCorrect = false;
+            }
           }
           
-          pointsEarned = isCorrect ? question.points : 0;
           totalScore += pointsEarned;
         }
 
@@ -379,7 +445,9 @@ const QuizTaking = () => {
           question_id: questionId,
           answer_text: answer,
           is_correct: isCorrect,
-          points_earned: pointsEarned
+          points_earned: pointsEarned,
+          auto_graded_score: autoGradedScore,
+          requires_manual_review: requiresManualReview
         };
       });
 

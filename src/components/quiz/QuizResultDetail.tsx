@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle, XCircle, Clock, User, FileText } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Clock, User, FileText, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,8 @@ interface QuestionAnswer {
   answer_text: string | null;
   is_correct: boolean | null;
   points_earned: number | null;
+  auto_graded_score: number | null;
+  requires_manual_review: boolean | null;
 }
 
 interface AttemptDetail {
@@ -104,6 +106,8 @@ const QuizResultDetail = () => {
           answer_text,
           is_correct,
           points_earned,
+          auto_graded_score,
+          requires_manual_review,
           questions (
             id,
             question_text,
@@ -134,7 +138,9 @@ const QuizResultDetail = () => {
         image_url: answer.questions.image_url,
         answer_text: answer.answer_text,
         is_correct: answer.is_correct,
-        points_earned: answer.points_earned || 0
+        points_earned: answer.points_earned || 0,
+        auto_graded_score: answer.auto_graded_score,
+        requires_manual_review: answer.requires_manual_review
       })) || [];
 
       setAttemptDetail({
@@ -342,11 +348,32 @@ const QuizResultDetail = () => {
                   <p className="text-sm font-medium text-muted-foreground">Student's Answer:</p>
                   <div className="bg-muted/50 rounded p-3">
                     {answer.answer_text ? (
-                      <p className="text-foreground">{answer.answer_text}</p>
+                      <p className="text-foreground whitespace-pre-wrap">{answer.answer_text}</p>
                     ) : (
                       <p className="text-muted-foreground italic">No answer provided</p>
                     )}
                   </div>
+                  
+                  {/* Auto-grading info for short answer */}
+                  {answer.question_type === 'short-answer' && answer.auto_graded_score !== null && (
+                    <div className="mt-2 p-3 bg-primary/5 rounded border border-primary/20">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Auto-Graded Score:</p>
+                          <p className="text-xs text-muted-foreground">Based on keyword matching</p>
+                        </div>
+                        <Badge variant="outline" className="text-base">
+                          {answer.auto_graded_score.toFixed(2)} / {answer.points} pts
+                        </Badge>
+                      </div>
+                      {answer.requires_manual_review && (
+                        <div className="mt-2 flex items-start gap-2 text-xs text-warning">
+                          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                          <span>This answer may require manual review for final grading</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Correct Answer (if available) */}
