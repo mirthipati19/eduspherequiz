@@ -15,12 +15,50 @@ export function useSEBValidation(quizId: string) {
 
   useEffect(() => {
     const validateSEB = async () => {
-      if (!quizId) return;
+      if (!quizId) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
         setError(null);
 
+        // First, check if this quiz requires SEB
+        const { data: quiz, error: quizError } = await supabase
+          .from('quizzes')
+          .select('require_seb')
+          .eq('id', quizId)
+          .single();
+
+        if (quizError) {
+          throw new Error('Failed to check quiz requirements');
+        }
+
+        // If SEB is not required, validation passes
+        if (!quiz?.require_seb) {
+          setIsValid(true);
+          setLoading(false);
+          return;
+        }
+
+        // SEB is required - check if we're in SEB environment
+        const isSEBEnvironment = 
+          navigator.userAgent.includes('SEB') ||
+          // @ts-ignore - SEB specific properties
+          window.sebHost !== undefined ||
+          // @ts-ignore
+          window.SafeExamBrowser !== undefined;
+
+        if (!isSEBEnvironment) {
+          // SEB required but not present
+          setIsValid(false);
+          setError('This quiz requires Safe Exam Browser. Please open the quiz using the provided .seb configuration file.');
+          setLoading(false);
+          return;
+        }
+
+        // We're in SEB - validate the session
         const currentUrl = window.location.href;
         
         const { data, error: sebError } = await supabase.functions.invoke('seb-validate', {
@@ -40,7 +78,7 @@ export function useSEBValidation(quizId: string) {
           setIsValid(true);
         } else {
           setIsValid(false);
-          setError(result.message || result.error || 'SEB validation failed');
+          setError(result.message || result.error || 'SEB validation failed. Please ensure you are using the correct .seb configuration file.');
         }
       } catch (err) {
         console.error('SEB validation error:', err);
@@ -51,25 +89,7 @@ export function useSEBValidation(quizId: string) {
       }
     };
 
-    // Check if we're in SEB environment by looking for SEB-specific properties
-    const isSEBEnvironment = () => {
-      // Check for SEB-specific window properties or user agent strings
-      return (
-        navigator.userAgent.includes('SEB') ||
-        // @ts-ignore - SEB specific properties
-        window.sebHost !== undefined ||
-        // @ts-ignore
-        window.SafeExamBrowser !== undefined
-      );
-    };
-
-    // Only validate if we think we're in SEB
-    if (isSEBEnvironment()) {
-      validateSEB();
-    } else {
-      // If not in SEB, we still need to check if SEB is required
-      setLoading(false);
-    }
+    validateSEB();
   }, [quizId]);
 
   return {

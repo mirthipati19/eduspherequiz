@@ -68,40 +68,57 @@ export class RealPDFParser {
       //  D. option
       //  Answer: A
       
-      // First, split by question numbers to handle line breaks better
-      const questionBlocks = allText.split(/(?=^\d+\.\s)/m);
+      // Split by question numbers - use lookahead to keep the number
+      const questionBlocks = allText.split(/(?=\d+\.\s+)/);
+      
+      let questionCount = 0;
       
       for (const block of questionBlocks) {
-        if (!block.trim()) continue;
+        const trimmedBlock = block.trim();
+        if (!trimmedBlock || trimmedBlock.length < 10) continue;
         
         // Extract question number
-        const numMatch = block.match(/^(\d+)\./);
+        const numMatch = trimmedBlock.match(/^(\d+)\.\s+/);
         if (!numMatch) continue;
         
-        const questionNum = numMatch[1];
+        const questionNum = parseInt(numMatch[1]);
         
         // Extract question text (everything between number and first option)
-        const questionTextMatch = block.match(/^\d+\.\s*(.+?)(?=\s*[A-D]\.|$)/s);
-        if (!questionTextMatch) continue;
+        // Look for text after number until we hit A. or A)
+        const questionTextMatch = trimmedBlock.match(/^\d+\.\s+(.+?)(?=\s+[A-D][\.\)])/s);
+        if (!questionTextMatch) {
+          console.warn(`Skipping question ${questionNum} - no question text found`);
+          continue;
+        }
         
         const questionText = questionTextMatch[1].trim().replace(/\s+/g, ' ');
         
-        // Extract options A-D (more flexible with whitespace and line breaks)
-        const optionA = block.match(/[A][\.\)]\s*(.+?)(?=\s*[B][\.\)]|Answer|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
-        const optionB = block.match(/[B][\.\)]\s*(.+?)(?=\s*[C][\.\)]|Answer|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
-        const optionC = block.match(/[C][\.\)]\s*(.+?)(?=\s*[D][\.\)]|Answer|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
-        const optionD = block.match(/[D][\.\)]\s*(.+?)(?=\s*(?:Answer|Correct|\d+\.)|$)/s)?.[1]?.trim().replace(/\s+/g, ' ') || '';
+        // Extract options A-D with better pattern
+        const optionPatterns = {
+          A: /[A][\.\)]\s*(.+?)(?=\s+[B][\.\)]|\s+Answer|\s+Correct|$)/si,
+          B: /[B][\.\)]\s*(.+?)(?=\s+[C][\.\)]|\s+Answer|\s+Correct|$)/si,
+          C: /[C][\.\)]\s*(.+?)(?=\s+[D][\.\)]|\s+Answer|\s+Correct|$)/si,
+          D: /[D][\.\)]\s*(.+?)(?=\s+Answer|\s+Correct|\s+\d+\.|$)/si
+        };
         
-        const options = [optionA, optionB, optionC, optionD];
+        const options: string[] = [];
+        for (const [key, pattern] of Object.entries(optionPatterns)) {
+          const match = trimmedBlock.match(pattern);
+          if (match && match[1]) {
+            options.push(match[1].trim().replace(/\s+/g, ' '));
+          } else {
+            options.push('');
+          }
+        }
         
-        // Validate we got good data
-        if (!questionText || options.some(opt => !opt || opt.length < 1)) {
-          console.warn(`Skipping question ${questionNum} - incomplete data`);
+        // Validate we got all 4 options with content
+        if (options.some(opt => !opt || opt.length < 1)) {
+          console.warn(`Skipping question ${questionNum} - incomplete options. Found: ${options.filter(o => o).length}/4`);
           continue;
         }
         
         // Extract answer (look for "Answer: A" or "Answer:A" or "Correct: B")
-        const answerMatch = block.match(/(?:Answer|Correct)\s*:?\s*([A-D])/i);
+        const answerMatch = trimmedBlock.match(/(?:Answer|Correct)\s*:?\s*([A-D])/i);
         
         let correctAnswer = '';
         if (answerMatch) {
@@ -112,15 +129,22 @@ export class RealPDFParser {
           }
         }
         
+        if (!correctAnswer) {
+          console.warn(`Question ${questionNum} has no valid answer specified, defaulting to A`);
+          correctAnswer = options[0];
+        }
+        
         questions.push({
           question_text: questionText,
           question_type: 'multiple-choice',
           options: options,
-          correct_answer: correctAnswer || options[0], // Default to first option if no answer found
+          correct_answer: correctAnswer,
           points: 1,
-          order_index: parseInt(questionNum) - 1,
+          order_index: questionCount,
           has_image: false
         });
+        
+        questionCount++;
       }
 
       if (questions.length === 0) {

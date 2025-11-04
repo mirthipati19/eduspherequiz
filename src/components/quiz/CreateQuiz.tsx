@@ -151,7 +151,11 @@ const CreateQuiz = () => {
             question_text: question.text,
             question_type: question.type,
             options: question.type === 'multiple-choice' ? question.options : null,
-            correct_answer: question.type === 'multiple-choice' ? question.options[question.correctAnswer] : null,
+            correct_answer: question.type === 'multiple-choice' 
+              ? question.options[question.correctAnswer] 
+              : question.type === 'fill-blank'
+              ? question.options[question.correctAnswer]
+              : null,
             points: question.points,
             order_index: i + 1,
             has_image: question.hasImage,
@@ -483,8 +487,19 @@ const CreateQuiz = () => {
 
                   {question.type === "fill-blank" && (
                     <div className="space-y-2">
-                      <Label>Correct Answer</Label>
-                      <Input placeholder="Enter the correct answer..." />
+                      <Label>Correct Answer (case-sensitive)</Label>
+                      <Input 
+                        value={question.options[question.correctAnswer] || ''}
+                        onChange={(e) => {
+                          const newOptions = [...question.options];
+                          newOptions[question.correctAnswer] = e.target.value;
+                          updateLocalQuestion(question.id, "options", newOptions);
+                        }}
+                        placeholder="Enter the exact correct answer (case-sensitive)..." 
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Answer matching is case-sensitive and must be exact.
+                      </p>
                     </div>
                   )}
 

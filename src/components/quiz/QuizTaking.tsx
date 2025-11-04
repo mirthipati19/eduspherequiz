@@ -69,7 +69,6 @@ const QuizTaking = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
-  const [requiresSEB, setRequiresSEB] = useState(false);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { progress, saveProgress, clearProgress } = useQuizProgress(
@@ -77,9 +76,9 @@ const QuizTaking = () => {
     isPreview ? null : quizId || null
   );
 
-  // SEB Validation (only if SEB is required)
+  // SEB Validation
   const { isValid: sebValid, loading: sebLoading, error: sebError } = useSEBValidation(
-    (requiresSEB && !isPreview && quizId) ? quizId : ''
+    quizId || ''
   );
 
   // Load saved progress if resuming
@@ -161,9 +160,6 @@ const QuizTaking = () => {
         navigate(`/quiz/${quizId}/direct`);
         return;
       }
-
-      // Set SEB requirement flag
-      setRequiresSEB(quiz.require_seb || false);
 
       // Check if quiz is published or if user is the creator/preview mode
       if (quiz.status !== 'published' && !isPreview) {
@@ -274,8 +270,8 @@ const QuizTaking = () => {
     );
   }
 
-  // Show SEB error if validation failed
-  if (requiresSEB && !isPreview && sebError) {
+  // Show SEB error if validation failed (skip in preview mode)
+  if (!isPreview && sebError && sebValid === false) {
     return (
       <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
         <Card className="w-full max-w-md shadow-card border-destructive">
@@ -409,8 +405,8 @@ const QuizTaking = () => {
             isCorrect = answer === question.correct_answer;
             pointsEarned = isCorrect ? question.points : 0;
           } else if (question.question_type === 'fill-blank') {
-            // Case-insensitive comparison for fill-in-the-blank
-            isCorrect = answer.toLowerCase().trim() === question.correct_answer?.toLowerCase().trim();
+            // Case-sensitive exact match for fill-in-the-blank
+            isCorrect = answer.trim() === question.correct_answer?.trim();
             pointsEarned = isCorrect ? question.points : 0;
           } else if (question.question_type === 'short-answer') {
             // Auto-grade short answer using keyword matching
