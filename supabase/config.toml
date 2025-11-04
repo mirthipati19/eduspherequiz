@@ -1,1 +1,4 @@
 project_id = "yicsoljqffweqqeafvna"
+
+[functions.generate-seb-config]
+verify_jwt = false

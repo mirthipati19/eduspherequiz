@@ -141,18 +141,40 @@ const DirectQuizAccess = () => {
 
       // Check if SEB is required and trigger download
       if ((quiz as any).require_seb) {
-        // Trigger SEB file download
-        const link = document.createElement('a');
-        link.href = '/SebClientSettings.seb';
-        link.download = `${quiz.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_seb_config.seb`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        toast.success("SEB config downloaded! Please open it to start the quiz.");
-        
-        // Wait a moment for the download to start
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          // Generate and download SEB config file with the quiz URL
+          const { data: sebConfigText, error: sebError } = await supabase.functions.invoke('generate-seb-config', {
+            body: {
+              quizId: quiz.id,
+              accessToken: attempt.access_token,
+              quizTitle: quiz.title
+            }
+          });
+
+          if (sebError) throw sebError;
+
+          // Create blob from the XML text and trigger download
+          const blob = new Blob([sebConfigText], { type: 'application/x-apple-plist' });
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${quiz.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_seb_config.seb`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          
+          toast.success("SEB config downloaded! Please open it with Safe Exam Browser to start the quiz.");
+          
+          // Don't navigate - let SEB open the quiz
+          setIsStarting(false);
+          return;
+        } catch (err) {
+          console.error('Error generating SEB config:', err);
+          toast.error("Failed to generate SEB config. Please try again.");
+          setIsStarting(false);
+          return;
+        }
       }
 
       toast.success("Quiz started successfully!");
