@@ -34,6 +34,14 @@ const DirectQuizAccess = () => {
   const [password, setPassword] = useState("");
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSEB, setIsSEB] = useState(false);
+
+  useEffect(() => {
+    // Check if we're running inside SEB
+    const userAgent = navigator.userAgent;
+    const sebDetected = userAgent.includes('SEB') || userAgent.includes('SafeExamBrowser');
+    setIsSEB(sebDetected);
+  }, []);
 
   useEffect(() => {
     if (quizId) {
@@ -96,17 +104,11 @@ const DirectQuizAccess = () => {
     setIsStarting(true);
 
     try {
-      // Check if SEB is required
-      if ((quiz as any).require_seb) {
-        // Check if we're running inside SEB
-        const userAgent = navigator.userAgent;
-        const isSEB = userAgent.includes('SEB') || userAgent.includes('SafeExamBrowser');
-        
-        if (!isSEB) {
-          setError("This quiz requires Safe Exam Browser. Please open the quiz link in SEB.");
-          setIsStarting(false);
-          return;
-        }
+      // Check if SEB is required and we're not in SEB
+      if ((quiz as any).require_seb && !isSEB) {
+        setError("This quiz requires Safe Exam Browser. Please use the 'Launch in SEB' button above.");
+        setIsStarting(false);
+        return;
       }
 
       // Check for existing attempts by email
@@ -166,36 +168,17 @@ const DirectQuizAccess = () => {
     }
   };
 
-  const handleDownloadSEBConfig = async () => {
+  const handleLaunchInSEB = () => {
     if (!quiz) return;
-
-    try {
-      const { data: sebConfigText, error: sebError } = await supabase.functions.invoke('generate-seb-config', {
-        body: {
-          quizId: quiz.id,
-          quizTitle: quiz.title,
-          frontendUrl: window.location.origin
-        }
-      });
-
-      if (sebError) throw sebError;
-
-      // Create blob from the XML text and trigger download
-      const blob = new Blob([sebConfigText], { type: 'application/x-apple-plist' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${quiz.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_seb_config.seb`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      toast.success("SEB config downloaded! Please open it with Safe Exam Browser to access this quiz.");
-    } catch (err) {
-      console.error('Error generating SEB config:', err);
-      toast.error("Failed to generate SEB config. Please try again.");
-    }
+    
+    // Use seb:// URL scheme to launch SEB with the current quiz URL
+    const currentUrl = window.location.href;
+    const sebUrl = `seb://${currentUrl.replace(/^https?:\/\//, '')}`;
+    
+    // Create a temporary link and click it
+    window.location.href = sebUrl;
+    
+    toast.info("Launching Safe Exam Browser... If nothing happens, please ensure SEB is installed on your computer.");
   };
 
   if (loading) {
@@ -250,23 +233,33 @@ const DirectQuizAccess = () => {
              )}
            </div>
            
-           {(quiz as any).require_seb && (
-             <div className="mt-4 p-3 bg-warning/10 border border-warning/20 rounded-lg">
-               <div className="flex items-center space-x-2 text-sm text-warning">
-                 <Shield className="h-4 w-4" />
-                 <span className="font-medium">Safe Exam Browser Required</span>
+           {(quiz as any).require_seb && !isSEB && (
+             <div className="mt-4 p-4 bg-warning/10 border-2 border-warning/30 rounded-lg">
+               <div className="flex items-center space-x-2 text-sm text-warning mb-2">
+                 <Shield className="h-5 w-5" />
+                 <span className="font-semibold">Safe Exam Browser Required</span>
                </div>
-               <p className="text-xs text-muted-foreground mt-1">
-                 Download the SEB config file and open it to access this quiz.
+               <p className="text-xs text-muted-foreground mb-3">
+                 This quiz must be taken in Safe Exam Browser. Click the button below to launch SEB automatically.
                </p>
                <Button 
-                 onClick={handleDownloadSEBConfig}
-                 variant="outline"
-                 size="sm"
-                 className="mt-2 w-full"
+                 onClick={handleLaunchInSEB}
+                 variant="default"
+                 size="lg"
+                 className="w-full bg-warning hover:bg-warning/90 text-warning-foreground"
                >
-                 Download SEB Config
+                 <Shield className="h-4 w-4 mr-2" />
+                 Launch in Safe Exam Browser
                </Button>
+             </div>
+           )}
+           
+           {(quiz as any).require_seb && isSEB && (
+             <div className="mt-4 p-3 bg-success/10 border border-success/20 rounded-lg">
+               <div className="flex items-center space-x-2 text-sm text-success">
+                 <Shield className="h-4 w-4" />
+                 <span className="font-medium">Running in Safe Exam Browser ✓</span>
+               </div>
              </div>
            )}
         </CardHeader>
@@ -336,12 +329,18 @@ const DirectQuizAccess = () => {
           
            <Button 
              onClick={handleStartQuiz}
-             disabled={isStarting}
+             disabled={isStarting || ((quiz as any).require_seb && !isSEB)}
              className="w-full bg-gradient-accent text-accent-foreground shadow-elegant"
              size="lg"
            >
              {isStarting ? "Starting Quiz..." : "Start Quiz"}
            </Button>
+           
+           {(quiz as any).require_seb && !isSEB && (
+             <p className="text-xs text-center text-muted-foreground mt-2">
+               Please launch Safe Exam Browser first to start this quiz
+             </p>
+           )}
         </CardContent>
       </Card>
     </div>
