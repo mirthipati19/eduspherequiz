@@ -96,6 +96,19 @@ const DirectQuizAccess = () => {
     setIsStarting(true);
 
     try {
+      // Check if SEB is required
+      if ((quiz as any).require_seb) {
+        // Check if we're running inside SEB
+        const userAgent = navigator.userAgent;
+        const isSEB = userAgent.includes('SEB') || userAgent.includes('SafeExamBrowser');
+        
+        if (!isSEB) {
+          setError("This quiz requires Safe Exam Browser. Please open the quiz link in SEB.");
+          setIsStarting(false);
+          return;
+        }
+      }
+
       // Check for existing attempts by email
       const { data: existingAttempts, error: countError } = await supabase
         .from('quiz_attempts')
@@ -132,51 +145,13 @@ const DirectQuizAccess = () => {
           student_name: studentName.trim(),
           student_email: studentEmail.trim().toLowerCase(),
           access_token: crypto.randomUUID(), // Generate unique access token
-          status: 'in_progress'
+          status: 'in_progress',
+          is_seb_session: (quiz as any).require_seb
         })
         .select()
         .single();
 
       if (attemptError) throw attemptError;
-
-      // Check if SEB is required and trigger download
-      if ((quiz as any).require_seb) {
-        try {
-          // Generate and download SEB config file with the quiz URL
-          const { data: sebConfigText, error: sebError } = await supabase.functions.invoke('generate-seb-config', {
-            body: {
-              quizId: quiz.id,
-              accessToken: attempt.access_token,
-              quizTitle: quiz.title,
-              frontendUrl: window.location.origin
-            }
-          });
-
-          if (sebError) throw sebError;
-
-          // Create blob from the XML text and trigger download
-          const blob = new Blob([sebConfigText], { type: 'application/x-apple-plist' });
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `${quiz.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_seb_config.seb`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          
-          toast.success("SEB config downloaded! Please open it with Safe Exam Browser to start the quiz.");
-          
-          // Don't navigate - let SEB open the quiz
-          setIsStarting(false);
-          return;
-        } catch (err) {
-          console.error('Error generating SEB config:', err);
-          toast.error("Failed to generate SEB config. Please try again.");
-          setIsStarting(false);
-          return;
-        }
-      }
 
       toast.success("Quiz started successfully!");
       
@@ -188,6 +163,38 @@ const DirectQuizAccess = () => {
       setError("Failed to start quiz. Please try again.");
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  const handleDownloadSEBConfig = async () => {
+    if (!quiz) return;
+
+    try {
+      const { data: sebConfigText, error: sebError } = await supabase.functions.invoke('generate-seb-config', {
+        body: {
+          quizId: quiz.id,
+          quizTitle: quiz.title,
+          frontendUrl: window.location.origin
+        }
+      });
+
+      if (sebError) throw sebError;
+
+      // Create blob from the XML text and trigger download
+      const blob = new Blob([sebConfigText], { type: 'application/x-apple-plist' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${quiz.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_seb_config.seb`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("SEB config downloaded! Please open it with Safe Exam Browser to access this quiz.");
+    } catch (err) {
+      console.error('Error generating SEB config:', err);
+      toast.error("Failed to generate SEB config. Please try again.");
     }
   };
 
@@ -250,8 +257,16 @@ const DirectQuizAccess = () => {
                  <span className="font-medium">Safe Exam Browser Required</span>
                </div>
                <p className="text-xs text-muted-foreground mt-1">
-                 This quiz requires Safe Exam Browser. The .seb file will download automatically when you start.
+                 Download the SEB config file and open it to access this quiz.
                </p>
+               <Button 
+                 onClick={handleDownloadSEBConfig}
+                 variant="outline"
+                 size="sm"
+                 className="mt-2 w-full"
+               >
+                 Download SEB Config
+               </Button>
              </div>
            )}
         </CardHeader>
@@ -325,7 +340,7 @@ const DirectQuizAccess = () => {
              className="w-full bg-gradient-accent text-accent-foreground shadow-elegant"
              size="lg"
            >
-             {isStarting ? "Starting Quiz..." : (quiz as any).require_seb ? "Download SEB & Start Quiz" : "Start Quiz"}
+             {isStarting ? "Starting Quiz..." : "Start Quiz"}
            </Button>
         </CardContent>
       </Card>
