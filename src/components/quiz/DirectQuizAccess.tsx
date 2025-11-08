@@ -147,7 +147,8 @@ const DirectQuizAccess = () => {
             body: {
               quizId: quiz.id,
               accessToken: attempt.access_token,
-              quizTitle: quiz.title
+              quizTitle: quiz.title,
+              frontendUrl: window.location.origin
             }
           });
 

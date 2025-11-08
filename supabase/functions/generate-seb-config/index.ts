@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { quizId, accessToken, quizTitle } = await req.json();
+    const { quizId, accessToken, quizTitle, frontendUrl } = await req.json();
 
     if (!quizId || !accessToken) {
       return new Response(
@@ -23,9 +23,9 @@ serve(async (req) => {
       );
     }
 
-    // Get the origin from the request to build the correct URL
-    const origin = new URL(req.url).origin;
-    const quizUrl = `${origin}/quiz/${quizId}/take?token=${accessToken}`;
+    // Use the provided frontend URL or fall back to the request origin
+    const baseUrl = frontendUrl || new URL(req.headers.get('origin') || req.headers.get('referer') || req.url).origin;
+    const quizUrl = `${baseUrl}/quiz/${quizId}/take?token=${accessToken}`;
 
     // Generate SEB config XML with the dynamic quiz URL
     const sebConfig = `<?xml version="1.0" encoding="utf-8"?>

@@ -8,7 +8,7 @@ interface SEBValidationResult {
   validated_with?: 'config_key' | 'browser_exam_key';
 }
 
-export function useSEBValidation(quizId: string) {
+export function useSEBValidation(quizId: string, accessToken?: string | null) {
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,35 @@ export function useSEBValidation(quizId: string) {
           return;
         }
 
-        // SEB is required - check if we're in SEB environment
+        // If we have an access token, let the backend validate it
+        if (accessToken) {
+          const currentUrl = window.location.href;
+          
+          const { data, error: sebError } = await supabase.functions.invoke('seb-validate', {
+            body: { 
+              quizId, 
+              requestUrl: currentUrl,
+              accessToken: accessToken || null
+            }
+          });
+
+          if (sebError) {
+            throw new Error(sebError.message);
+          }
+
+          const result = data as SEBValidationResult;
+          
+          if (result.valid) {
+            setIsValid(true);
+          } else {
+            setIsValid(false);
+            setError(result.message || result.error || 'Quiz access validation failed.');
+          }
+          setLoading(false);
+          return;
+        }
+
+        // No token - check if we're in SEB environment
         const isSEBEnvironment = 
           navigator.userAgent.includes('SEB') ||
           // @ts-ignore - SEB specific properties
@@ -58,13 +86,14 @@ export function useSEBValidation(quizId: string) {
           return;
         }
 
-        // We're in SEB - validate the session
+        // We're in SEB - validate the session with backend
         const currentUrl = window.location.href;
         
         const { data, error: sebError } = await supabase.functions.invoke('seb-validate', {
           body: { 
             quizId, 
-            requestUrl: currentUrl 
+            requestUrl: currentUrl,
+            accessToken: accessToken || null
           }
         });
 
@@ -90,7 +119,7 @@ export function useSEBValidation(quizId: string) {
     };
 
     validateSEB();
-  }, [quizId]);
+  }, [quizId, accessToken]);
 
   return {
     isValid,

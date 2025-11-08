@@ -76,9 +76,10 @@ const QuizTaking = () => {
     isPreview ? null : quizId || null
   );
 
-  // SEB Validation
+  // SEB Validation with token
   const { isValid: sebValid, loading: sebLoading, error: sebError } = useSEBValidation(
-    quizId || ''
+    quizId || '',
+    token
   );
 
   // Load saved progress if resuming

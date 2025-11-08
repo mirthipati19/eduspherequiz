@@ -17,26 +17,9 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { quizId, requestUrl } = await req.json();
+    const { quizId, requestUrl, accessToken } = await req.json();
     
-    // Get SEB header
-    const sebHeader = req.headers.get('X-SafeExamBrowser-ConfigKeyHash') || '';
-    
-    if (!sebHeader) {
-      return new Response(
-        JSON.stringify({ 
-          valid: false, 
-          error: 'SEB header missing', 
-          message: 'Safe Exam Browser is required for this quiz' 
-        }),
-        { 
-          status: 403, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    // Fetch quiz SEB configuration
+    // Fetch quiz SEB configuration first
     const { data: quiz, error: quizError } = await supabase
       .from('quizzes')
       .select('seb_config_key, seb_browser_exam_key, require_seb')
@@ -65,6 +48,47 @@ serve(async (req) => {
           message: 'SEB not required for this quiz' 
         }),
         { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // If access token is provided, validate it instead of SEB headers
+    if (accessToken) {
+      const { data: attempt, error: attemptError } = await supabase
+        .from('quiz_attempts')
+        .select('id, quiz_id')
+        .eq('quiz_id', quizId)
+        .eq('access_token', accessToken)
+        .maybeSingle();
+
+      if (!attemptError && attempt) {
+        console.log('SEB validation passed via access token:', { quizId, accessToken });
+        return new Response(
+          JSON.stringify({ 
+            valid: true, 
+            message: 'SEB validation successful via access token',
+            validated_with: 'access_token'
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+    }
+    
+    // Get SEB header for traditional SEB validation
+    const sebHeader = req.headers.get('X-SafeExamBrowser-ConfigKeyHash') || '';
+    
+    if (!sebHeader) {
+      return new Response(
+        JSON.stringify({ 
+          valid: false, 
+          error: 'SEB header missing', 
+          message: 'Safe Exam Browser is required for this quiz. Please ensure you opened the quiz via the .seb file.' 
+        }),
+        { 
+          status: 403, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
