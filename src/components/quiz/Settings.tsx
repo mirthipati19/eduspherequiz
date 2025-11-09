@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Lock, Moon, Sun, Save, Mail } from "lucide-react";
+import { User, Lock, Moon, Sun, Save, Mail, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -112,6 +112,30 @@ const Settings = () => {
     } catch (error) {
       console.error('Error changing password:', error);
       toast.error("Failed to change password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!profile.email) {
+      toast.error("Email not found");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
+        redirectTo: `${window.location.origin}/`,
+      });
+
+      if (error) throw error;
+
+      toast.success("Password reset email sent! Check your inbox.");
+    } catch (error) {
+      console.error('Error sending reset email:', error);
+      toast.error("Failed to send reset email");
     } finally {
       setLoading(false);
     }
@@ -249,14 +273,25 @@ const Settings = () => {
             />
           </div>
 
-          <Button 
-            onClick={handlePasswordChange} 
-            disabled={loading || !passwordData.newPassword}
-            className="w-full sm:w-auto"
-          >
-            <Lock className="h-4 w-4 mr-2" />
-            Change Password
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button 
+              onClick={handlePasswordChange} 
+              disabled={loading || !passwordData.newPassword}
+              className="w-full sm:w-auto"
+            >
+              <Lock className="h-4 w-4 mr-2" />
+              Change Password
+            </Button>
+            <Button 
+              onClick={handleForgotPassword} 
+              disabled={loading}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              <KeyRound className="h-4 w-4 mr-2" />
+              Forgot Password
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

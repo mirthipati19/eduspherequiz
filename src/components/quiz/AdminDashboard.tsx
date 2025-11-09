@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { AdminGuard } from "@/components/auth/AdminGuard";
 import QuizList from "./QuizList";
-import FavoriteQuestions from "./FavoriteQuestions";
+import QuestionBank from "./FavoriteQuestions";
 import SettingsPage from "./Settings";
 import CreateQuiz from "./CreateQuiz";
 import EditQuiz from "./EditQuiz";
@@ -88,7 +88,7 @@ const AdminDashboard = () => {
             <Routes>
               <Route path="/" element={<QuizList />} />
               <Route path="/quizzes" element={<QuizList />} />
-              <Route path="/favorites" element={<FavoriteQuestions />} />
+              <Route path="/favorites" element={<QuestionBank />} />
               <Route path="/create" element={<CreateQuiz />} />
               <Route path="/edit/:quizId" element={<EditQuiz />} />
               <Route path="/results" element={<Results />} />
