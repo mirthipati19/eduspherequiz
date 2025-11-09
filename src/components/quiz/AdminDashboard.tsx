@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { AdminGuard } from "@/components/auth/AdminGuard";
 import QuizList from "./QuizList";
-import QuestionBank from "./QuestionBank";
+import FavoriteQuestions from "./FavoriteQuestions";
+import SettingsPage from "./Settings";
 import CreateQuiz from "./CreateQuiz";
 import EditQuiz from "./EditQuiz";
 import Results from "./Results";
@@ -16,7 +17,7 @@ const AdminDashboard = () => {
   
   const navigation = [
     { name: "Quizzes", href: "/admin/quizzes", icon: BookOpen },
-    { name: "Question Bank", href: "/admin/questions", icon: FileText },
+    { name: "Favorites", href: "/admin/favorites", icon: FileText },
     { name: "Results", href: "/admin/results", icon: BarChart3 },
     { name: "Settings", href: "/admin/settings", icon: Settings },
   ];
@@ -87,12 +88,12 @@ const AdminDashboard = () => {
             <Routes>
               <Route path="/" element={<QuizList />} />
               <Route path="/quizzes" element={<QuizList />} />
-              <Route path="/questions" element={<QuestionBank />} />
+              <Route path="/favorites" element={<FavoriteQuestions />} />
               <Route path="/create" element={<CreateQuiz />} />
               <Route path="/edit/:quizId" element={<EditQuiz />} />
               <Route path="/results" element={<Results />} />
               <Route path="/results/:attemptId" element={<QuizResultDetail />} />
-              <Route path="/settings" element={<div>Settings coming soon...</div>} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>
         </div>

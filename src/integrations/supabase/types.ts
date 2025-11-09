@@ -68,6 +68,38 @@ export type Database = {
           },
         ]
       }
+      favorite_questions: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          question_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          question_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          question_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorite_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

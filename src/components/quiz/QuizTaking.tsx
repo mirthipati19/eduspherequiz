@@ -379,11 +379,11 @@ const QuizTaking = () => {
     setIsSubmitting(true);
     
     try {
-      // Calculate grade
+      // Calculate grade - MUST consider ALL questions
       let totalScore = 0;
       let maxScore = 0;
       
-      // First, fetch questions with correct answers and keywords for grading
+      // First, fetch ALL questions with correct answers and keywords for grading
       const { data: questionsWithAnswers, error: questionsError } = await supabase
         .from('questions')
         .select('id, correct_answer, points, question_type, expected_keywords, keyword_weightage')
@@ -391,62 +391,76 @@ const QuizTaking = () => {
 
       if (questionsError) throw questionsError;
 
-      // Save all answers with grading (including auto-grading for short answers)
-      const answerData = Object.entries(answers).map(([questionId, answer]) => {
-        const question = questionsWithAnswers?.find(q => q.id === questionId);
+      // Calculate max score from ALL questions
+      questionsWithAnswers?.forEach(q => {
+        maxScore += q.points;
+      });
+
+      // Create answer data for ALL questions (answered and unanswered)
+      const answerData = questionsWithAnswers?.map((question) => {
+        const answer = answers[question.id] || ""; // Empty string for unanswered
         let isCorrect = false;
         let pointsEarned = 0;
         let autoGradedScore: number | null = null;
         let requiresManualReview = false;
 
-        if (question) {
-          maxScore += question.points;
-          
-          if (question.question_type === 'multiple-choice') {
-            isCorrect = answer === question.correct_answer;
-            pointsEarned = isCorrect ? question.points : 0;
-          } else if (question.question_type === 'fill-blank') {
-            // Case-sensitive exact match for fill-in-the-blank
-            isCorrect = answer.trim() === question.correct_answer?.trim();
-            pointsEarned = isCorrect ? question.points : 0;
-          } else if (question.question_type === 'short-answer') {
-            // Auto-grade short answer using keyword matching
-            if (question.expected_keywords && question.keyword_weightage) {
-              const gradingResult = gradeShortAnswer(
-                answer,
-                question.expected_keywords as string[],
-                question.keyword_weightage as Record<string, number>,
-                question.points
-              );
-              
-              autoGradedScore = gradingResult.score;
-              pointsEarned = gradingResult.score;
-              
-              // Mark for manual review if score is in middle range (40-60%)
-              requiresManualReview = gradingResult.percentage >= 40 && gradingResult.percentage <= 60;
-              
-              // Consider partially correct if got some points
-              isCorrect = gradingResult.score > 0;
-            } else {
-              // No keywords defined, mark for manual review
-              requiresManualReview = true;
-              isCorrect = false;
-            }
-          }
-          
-          totalScore += pointsEarned;
+        // Handle unanswered questions
+        if (!answer || answer.trim() === "") {
+          return {
+            attempt_id: attemptId,
+            question_id: question.id,
+            answer_text: "",
+            is_correct: false,
+            points_earned: 0,
+            auto_graded_score: null,
+            requires_manual_review: false
+          };
         }
+        // Grade the answer
+        if (question.question_type === 'multiple-choice') {
+          isCorrect = answer === question.correct_answer;
+          pointsEarned = isCorrect ? question.points : 0;
+        } else if (question.question_type === 'fill-blank') {
+          // Case-sensitive exact match for fill-in-the-blank
+          isCorrect = answer.trim() === question.correct_answer?.trim();
+          pointsEarned = isCorrect ? question.points : 0;
+        } else if (question.question_type === 'short-answer') {
+          // Auto-grade short answer using keyword matching
+          if (question.expected_keywords && question.keyword_weightage) {
+            const gradingResult = gradeShortAnswer(
+              answer,
+              question.expected_keywords as string[],
+              question.keyword_weightage as Record<string, number>,
+              question.points
+            );
+            
+            autoGradedScore = gradingResult.score;
+            pointsEarned = gradingResult.score;
+            
+            // Mark for manual review if score is in middle range (40-60%)
+            requiresManualReview = gradingResult.percentage >= 40 && gradingResult.percentage <= 60;
+            
+            // Consider partially correct if got some points
+            isCorrect = gradingResult.score > 0;
+          } else {
+            // No keywords defined, mark for manual review
+            requiresManualReview = true;
+            isCorrect = false;
+          }
+        }
+        
+        totalScore += pointsEarned;
 
         return {
           attempt_id: attemptId,
-          question_id: questionId,
+          question_id: question.id,
           answer_text: answer,
           is_correct: isCorrect,
           points_earned: pointsEarned,
           auto_graded_score: autoGradedScore,
           requires_manual_review: requiresManualReview
         };
-      });
+      }) || [];
 
       if (answerData.length > 0) {
         const { error: answersError } = await supabase

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ThemeProvider } from "next-themes";
 import AdminDashboard from "@/components/quiz/AdminDashboard";
 import StudentDashboard from "@/components/quiz/StudentDashboard";
 import QuizTaking from "@/components/quiz/QuizTaking";
@@ -17,29 +18,31 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <div className="min-h-screen bg-gradient-subtle">
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Navigate to="/admin" replace />} />
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/admin/*" element={<AdminDashboard />} />
-              <Route path="/admin/results/:attemptId" element={<QuizResultDetail />} />
-              <Route path="/student" element={<StudentDashboard />} />
-              <Route path="/quiz/:quizId/direct" element={<DirectQuizAccess />} />
-              <Route path="/quiz/:quizId/take" element={<QuizTaking />} />
-              <Route path="/quiz/:quizId" element={<QuizTaking />} />
-              <Route path="/quiz/results" element={<QuizResults />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </div>
-      </TooltipProvider>
-    </AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <AuthProvider>
+        <TooltipProvider>
+          <div className="min-h-screen bg-gradient-subtle">
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Navigate to="/admin" replace />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/admin/*" element={<AdminDashboard />} />
+                <Route path="/admin/results/:attemptId" element={<QuizResultDetail />} />
+                <Route path="/student" element={<StudentDashboard />} />
+                <Route path="/quiz/:quizId/direct" element={<DirectQuizAccess />} />
+                <Route path="/quiz/:quizId/take" element={<QuizTaking />} />
+                <Route path="/quiz/:quizId" element={<QuizTaking />} />
+                <Route path="/quiz/results" element={<QuizResults />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </div>
+        </TooltipProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

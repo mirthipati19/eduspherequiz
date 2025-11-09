@@ -167,18 +167,24 @@ const QuizResults = () => {
 
             <Progress value={percentage} className="h-4" />
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-4 rounded-lg bg-muted/30">
-                <div className="text-2xl font-bold text-foreground">
-                  {results.filter(r => r.is_correct).length}
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center p-4 rounded-lg bg-accent/10">
+                <div className="text-2xl font-bold text-accent">
+                  {results.filter(r => r.is_correct && r.your_answer !== "" && r.your_answer !== "Not answered").length}
                 </div>
                 <div className="text-sm text-muted-foreground">Correct</div>
               </div>
-              <div className="text-center p-4 rounded-lg bg-muted/30">
-                <div className="text-2xl font-bold text-foreground">
-                  {results.filter(r => !r.is_correct && r.your_answer !== "Not answered").length}
+              <div className="text-center p-4 rounded-lg bg-destructive/10">
+                <div className="text-2xl font-bold text-destructive">
+                  {results.filter(r => !r.is_correct && r.your_answer !== "" && r.your_answer !== "Not answered").length}
                 </div>
-                <div className="text-sm text-muted-foreground">Incorrect</div>
+                <div className="text-sm text-muted-foreground">Wrong</div>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-warning/10">
+                <div className="text-2xl font-bold text-warning">
+                  {results.filter(r => r.your_answer === "" || r.your_answer === "Not answered").length}
+                </div>
+                <div className="text-sm text-muted-foreground">Unattempted</div>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/30">
                 <div className="text-2xl font-bold text-foreground">
