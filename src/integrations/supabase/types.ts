@@ -70,24 +70,39 @@ export type Database = {
       }
       favorite_questions: {
         Row: {
+          correct_answer: string | null
           created_at: string
           id: string
           notes: string | null
-          question_id: string
+          options: string | null
+          points: number | null
+          question_id: string | null
+          question_text: string | null
+          question_type: string | null
           user_id: string
         }
         Insert: {
+          correct_answer?: string | null
           created_at?: string
           id?: string
           notes?: string | null
-          question_id: string
+          options?: string | null
+          points?: number | null
+          question_id?: string | null
+          question_text?: string | null
+          question_type?: string | null
           user_id: string
         }
         Update: {
+          correct_answer?: string | null
           created_at?: string
           id?: string
           notes?: string | null
-          question_id?: string
+          options?: string | null
+          points?: number | null
+          question_id?: string | null
+          question_text?: string | null
+          question_type?: string | null
           user_id?: string
         }
         Relationships: [
