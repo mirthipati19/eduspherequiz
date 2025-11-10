@@ -421,8 +421,8 @@ const QuizTaking = () => {
           isCorrect = answer === question.correct_answer;
           pointsEarned = isCorrect ? question.points : 0;
         } else if (question.question_type === 'fill-blank') {
-          // Case-sensitive exact match for fill-in-the-blank
-          isCorrect = answer.trim() === question.correct_answer?.trim();
+          // Case-insensitive exact match for fill-in-the-blank
+          isCorrect = answer.trim().toLowerCase() === question.correct_answer?.trim().toLowerCase();
           pointsEarned = isCorrect ? question.points : 0;
         } else if (question.question_type === 'short-answer') {
           // Auto-grade short answer using keyword matching

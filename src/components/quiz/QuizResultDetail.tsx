@@ -353,6 +353,13 @@ const QuizResultDetail = () => {
                       <p className="text-muted-foreground italic">No answer provided</p>
                     )}
                   </div>
+                  {/* Show correct answer for wrong fill-in-blank */}
+                  {answer.question_type === 'fill-blank' && !answer.is_correct && answer.correct_answer && (
+                    <div className="mt-2 p-3 bg-accent/10 rounded border border-accent/20">
+                      <p className="text-sm font-medium text-muted-foreground">Correct Answer:</p>
+                      <p className="text-foreground font-medium">{answer.correct_answer}</p>
+                    </div>
+                  )}
                   
                   {/* Auto-grading info for short answer */}
                   {answer.question_type === 'short-answer' && answer.auto_graded_score !== null && (

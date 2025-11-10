@@ -453,14 +453,34 @@ const CreateQuiz = () => {
                       <Image className="h-4 w-4 mr-2" />
                       Add Image
                     </Button>
-                    <Badge variant="outline">
-                      Points: {question.points}
-                    </Badge>
+                    <div className="flex items-center space-x-2">
+                      <Label className="text-sm">Points:</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={question.points}
+                        onChange={(e) => updateLocalQuestion(question.id, "points", parseInt(e.target.value) || 1)}
+                        className="w-20"
+                      />
+                    </div>
                   </div>
 
                   {question.type === "multiple-choice" && (
                     <div className="space-y-2">
-                      <Label>Answer Options</Label>
+                      <div className="flex items-center justify-between">
+                        <Label>Answer Options</Label>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            const newOptions = [...question.options, ""];
+                            updateLocalQuestion(question.id, "options", newOptions);
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Option
+                        </Button>
+                      </div>
                       {question.options.map((option, optionIndex) => (
                         <div key={optionIndex} className="flex items-center space-x-2">
                           <Input
@@ -480,6 +500,24 @@ const CreateQuiz = () => {
                           >
                             {question.correctAnswer === optionIndex ? "Correct" : "Mark"}
                           </Button>
+                          {question.options.length > 2 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newOptions = question.options.filter((_, i) => i !== optionIndex);
+                                updateLocalQuestion(question.id, "options", newOptions);
+                                // Adjust correct answer if needed
+                                if (question.correctAnswer === optionIndex) {
+                                  updateLocalQuestion(question.id, "correctAnswer", 0);
+                                } else if (question.correctAnswer > optionIndex) {
+                                  updateLocalQuestion(question.id, "correctAnswer", question.correctAnswer - 1);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -487,7 +525,7 @@ const CreateQuiz = () => {
 
                   {question.type === "fill-blank" && (
                     <div className="space-y-2">
-                      <Label>Correct Answer (case-sensitive)</Label>
+                      <Label>Correct Answer (case-insensitive)</Label>
                       <Input 
                         value={question.options[question.correctAnswer] || ''}
                         onChange={(e) => {
@@ -495,10 +533,10 @@ const CreateQuiz = () => {
                           newOptions[question.correctAnswer] = e.target.value;
                           updateLocalQuestion(question.id, "options", newOptions);
                         }}
-                        placeholder="Enter the exact correct answer (case-sensitive)..." 
+                        placeholder="Enter the correct answer (case-insensitive)..." 
                       />
                       <p className="text-xs text-muted-foreground">
-                        Answer matching is case-sensitive and must be exact.
+                        Answer matching is case-insensitive.
                       </p>
                     </div>
                   )}

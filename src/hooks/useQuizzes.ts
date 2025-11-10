@@ -34,6 +34,8 @@ export interface Question {
   order_index: number;
   has_image: boolean;
   image_url: string | null;
+  expected_keywords?: any;
+  keyword_weightage?: any;
   created_at: string;
   updated_at: string;
 }

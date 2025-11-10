@@ -23,6 +23,8 @@ interface LocalQuestion {
   correctAnswer: number;
   hasImage: boolean;
   points: number;
+  keywords?: string[];
+  keywordWeightage?: Record<string, number>;
 }
 
 const EditQuiz = () => {
@@ -71,7 +73,9 @@ const EditQuiz = () => {
         options: Array.isArray(q.options) ? q.options : [],
         correctAnswer: 0, // Will need to parse from correct_answer
         hasImage: q.has_image,
-        points: q.points
+        points: q.points,
+        keywords: Array.isArray(q.expected_keywords) ? q.expected_keywords : [],
+        keywordWeightage: q.keyword_weightage as Record<string, number> || {}
       }));
       setLocalQuestions(convertedQuestions);
     }
@@ -168,29 +172,34 @@ const EditQuiz = () => {
 
       // Save/update questions
       for (const question of localQuestions) {
+        const questionData: any = {
+          question_text: question.text,
+          question_type: question.type,
+          points: question.points,
+          order_index: localQuestions.indexOf(question),
+          has_image: question.hasImage
+        };
+
+        // Add type-specific data
+        if (question.type === "multiple-choice") {
+          questionData.options = question.options;
+          questionData.correct_answer = question.options[question.correctAnswer];
+        } else if (question.type === "fill-blank") {
+          questionData.correct_answer = question.options[question.correctAnswer];
+        } else if (question.type === "short-answer") {
+          questionData.expected_keywords = question.keywords || [];
+          questionData.keyword_weightage = question.keywordWeightage || {};
+        }
+
         if (question.id.startsWith('temp-')) {
           // Create new question
           await createQuestion({
             quiz_id: quizId,
-            question_text: question.text,
-            question_type: question.type,
-            options: question.type === "multiple-choice" ? question.options : undefined,
-            correct_answer: question.type === "multiple-choice" ? question.options[question.correctAnswer] : undefined,
-            points: question.points,
-            order_index: localQuestions.indexOf(question),
-            has_image: question.hasImage
+            ...questionData
           });
         } else {
           // Update existing question
-          await updateQuestion(question.id, {
-            question_text: question.text,
-            question_type: question.type,
-            options: question.type === "multiple-choice" ? question.options : undefined,
-            correct_answer: question.type === "multiple-choice" ? question.options[question.correctAnswer] : undefined,
-            points: question.points,
-            order_index: localQuestions.indexOf(question),
-            has_image: question.hasImage
-          });
+          await updateQuestion(question.id, questionData);
         }
       }
 
@@ -484,14 +493,34 @@ const EditQuiz = () => {
                         <Image className="h-4 w-4 mr-2" />
                         Add Image
                       </Button>
-                      <Badge variant="outline">
-                        Points: {question.points}
-                      </Badge>
+                      <div className="flex items-center space-x-2">
+                        <Label className="text-sm">Points:</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={question.points}
+                          onChange={(e) => updateLocalQuestion(question.id, "points", parseInt(e.target.value) || 1)}
+                          className="w-20"
+                        />
+                      </div>
                     </div>
 
                     {question.type === "multiple-choice" && (
                       <div className="space-y-2">
-                        <Label>Answer Options</Label>
+                        <div className="flex items-center justify-between">
+                          <Label>Answer Options</Label>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              const newOptions = [...question.options, ""];
+                              updateLocalQuestion(question.id, "options", newOptions);
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Option
+                          </Button>
+                        </div>
                         {question.options.map((option, optionIndex) => (
                           <div key={optionIndex} className="flex items-center space-x-2">
                             <Input
@@ -511,6 +540,24 @@ const EditQuiz = () => {
                             >
                               {question.correctAnswer === optionIndex ? "Correct" : "Mark"}
                             </Button>
+                            {question.options.length > 2 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newOptions = question.options.filter((_, i) => i !== optionIndex);
+                                  updateLocalQuestion(question.id, "options", newOptions);
+                                  // Adjust correct answer if needed
+                                  if (question.correctAnswer === optionIndex) {
+                                    updateLocalQuestion(question.id, "correctAnswer", 0);
+                                  } else if (question.correctAnswer > optionIndex) {
+                                    updateLocalQuestion(question.id, "correctAnswer", question.correctAnswer - 1);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -518,18 +565,72 @@ const EditQuiz = () => {
 
                     {question.type === "fill-blank" && (
                       <div className="space-y-2">
-                        <Label>Correct Answer</Label>
-                        <Input placeholder="Enter the correct answer..." />
+                        <Label>Correct Answer (case-insensitive)</Label>
+                        <Input 
+                          value={question.options[question.correctAnswer] || ''}
+                          onChange={(e) => {
+                            const newOptions = [...question.options];
+                            newOptions[question.correctAnswer] = e.target.value;
+                            updateLocalQuestion(question.id, "options", newOptions);
+                          }}
+                          placeholder="Enter the correct answer (case-insensitive)..." 
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Answer matching is case-insensitive.
+                        </p>
                       </div>
                     )}
 
                     {question.type === "short-answer" && (
-                      <div className="space-y-2">
-                        <Label>Answer Guidelines (for manual grading)</Label>
-                        <Textarea 
-                          placeholder="Provide key points that should be included in the answer..."
-                          rows={3}
-                        />
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Expected Keywords/Phrases (one per line)</Label>
+                          <Textarea 
+                            value={(question.keywords || []).join('\n')}
+                            onChange={(e) => {
+                              const keywords = e.target.value.split('\n').filter(k => k.trim());
+                              updateLocalQuestion(question.id, "keywords", keywords);
+                              
+                              // Initialize weightage for new keywords
+                              const newWeightage = { ...(question.keywordWeightage || {}) };
+                              keywords.forEach(keyword => {
+                                if (!newWeightage[keyword]) {
+                                  newWeightage[keyword] = 1;
+                                }
+                              });
+                              updateLocalQuestion(question.id, "keywordWeightage", newWeightage);
+                            }}
+                            placeholder="Enter expected keywords or phrases, one per line..."
+                            rows={4}
+                          />
+                        </div>
+                        
+                        {question.keywords && question.keywords.length > 0 && (
+                          <div className="space-y-2">
+                            <Label>Scoring Weightage per Keyword</Label>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {question.keywords.map((keyword, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <span className="text-sm flex-1 truncate">{keyword}</span>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    value={question.keywordWeightage?.[keyword] || 1}
+                                    onChange={(e) => {
+                                      const newWeightage = {
+                                        ...(question.keywordWeightage || {}),
+                                        [keyword]: parseFloat(e.target.value) || 1
+                                      };
+                                      updateLocalQuestion(question.id, "keywordWeightage", newWeightage);
+                                    }}
+                                    className="w-20"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>

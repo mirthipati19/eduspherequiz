@@ -74,6 +74,9 @@ const Settings = () => {
 
       if (error) throw error;
 
+      // Refetch profile to update UI
+      await fetchProfile();
+      
       toast.success("Profile updated successfully!");
     } catch (error) {
       console.error('Error updating profile:', error);

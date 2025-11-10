@@ -22,11 +22,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface QuestionBankItem {
   id: string;
-  question_id?: string;
+  question_id?: string | null;
   notes: string;
   created_at: string;
   question_text: string;
-  question_type: "multiple-choice" | "fill-blank" | "short-answer";
+  question_type: string;
   points: number;
   options?: string[];
   correct_answer?: string;
