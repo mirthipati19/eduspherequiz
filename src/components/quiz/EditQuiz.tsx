@@ -22,6 +22,8 @@ interface LocalQuestion {
   options: string[];
   correctAnswer: number;
   hasImage: boolean;
+  imageUrl?: string;
+  imageFile?: File;
   points: number;
   keywords?: string[];
   keywordWeightage?: Record<string, number>;
@@ -73,6 +75,7 @@ const EditQuiz = () => {
         options: Array.isArray(q.options) ? q.options : [],
         correctAnswer: 0, // Will need to parse from correct_answer
         hasImage: q.has_image,
+        imageUrl: q.image_url || undefined,
         points: q.points,
         keywords: Array.isArray(q.expected_keywords) ? q.expected_keywords : [],
         keywordWeightage: q.keyword_weightage as Record<string, number> || {}
@@ -142,6 +145,24 @@ const EditQuiz = () => {
     setLocalQuestions(localQuestions.filter(q => q.id !== id));
   };
 
+  const handleImageUpload = (questionId: string, file: File) => {
+    // Store the file locally, will be uploaded when quiz is saved
+    const imageUrl = URL.createObjectURL(file);
+    setLocalQuestions(localQuestions.map(q => 
+      q.id === questionId 
+        ? { ...q, hasImage: true, imageFile: file, imageUrl } 
+        : q
+    ));
+  };
+
+  const handleRemoveImage = (questionId: string) => {
+    setLocalQuestions(localQuestions.map(q => 
+      q.id === questionId 
+        ? { ...q, hasImage: false, imageFile: undefined, imageUrl: undefined } 
+        : q
+    ));
+  };
+
   const handleSaveQuiz = async () => {
     if (!quizId) return;
     
@@ -191,15 +212,51 @@ const EditQuiz = () => {
           questionData.keyword_weightage = question.keywordWeightage || {};
         }
 
+        let questionId = question.id;
+        
         if (question.id.startsWith('temp-')) {
           // Create new question
-          await createQuestion({
+          const result = await createQuestion({
             quiz_id: quizId,
             ...questionData
           });
+          // Get the created question ID from the result
+          const { data: newQuestion } = await supabase
+            .from('questions')
+            .select('id')
+            .eq('quiz_id', quizId)
+            .eq('question_text', question.text)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          
+          if (newQuestion) {
+            questionId = newQuestion.id;
+          }
         } else {
           // Update existing question
           await updateQuestion(question.id, questionData);
+        }
+
+        // Handle image upload if there's a new file
+        if (question.imageFile && questionId) {
+          try {
+            const { ImageUploadService } = await import('@/services/imageUpload');
+            const imageUrl = await ImageUploadService.uploadQuestionImage(
+              quizId,
+              questionId,
+              question.imageFile
+            );
+            
+            // Update question with image URL
+            await supabase
+              .from('questions')
+              .update({ image_url: imageUrl })
+              .eq('id', questionId);
+          } catch (imageError) {
+            console.error("Error uploading image:", imageError);
+            toast.error(`Failed to upload image for question`);
+          }
         }
       }
 
@@ -489,10 +546,38 @@ const EditQuiz = () => {
                     </div>
 
                     <div className="flex items-center space-x-4">
-                      <Button variant="outline" size="sm" disabled>
-                        <Image className="h-4 w-4 mr-2" />
-                        Add Image
-                      </Button>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          id={`image-upload-${question.id}`}
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleImageUpload(question.id, file);
+                            }
+                          }}
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => document.getElementById(`image-upload-${question.id}`)?.click()}
+                        >
+                          <Image className="h-4 w-4 mr-2" />
+                          Add Image
+                        </Button>
+                        {question.hasImage && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemoveImage(question.id)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Remove
+                          </Button>
+                        )}
+                      </div>
                       <div className="flex items-center space-x-2">
                         <Label className="text-sm">Points:</Label>
                         <Input
@@ -504,6 +589,16 @@ const EditQuiz = () => {
                         />
                       </div>
                     </div>
+
+                    {question.hasImage && question.imageUrl && (
+                      <div className="mt-4">
+                        <img
+                          src={question.imageUrl}
+                          alt="Question preview"
+                          className="max-w-md rounded-lg border border-border"
+                        />
+                      </div>
+                    )}
 
                     {question.type === "multiple-choice" && (
                       <div className="space-y-2">

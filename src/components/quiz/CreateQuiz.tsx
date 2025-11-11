@@ -23,6 +23,8 @@ interface LocalQuestion {
   options: string[];
   correctAnswer: number;
   hasImage: boolean;
+  imageUrl?: string;
+  imageFile?: File;
   points: number;
   // Short answer fields
   keywords?: string[];
@@ -89,6 +91,24 @@ const CreateQuiz = () => {
     if (localQuestions.length > 1) {
       setLocalQuestions(localQuestions.filter(q => q.id !== id));
     }
+  };
+
+  const handleImageUpload = (questionId: string, file: File) => {
+    // Store the file locally, will be uploaded when quiz is saved
+    const imageUrl = URL.createObjectURL(file);
+    setLocalQuestions(localQuestions.map(q => 
+      q.id === questionId 
+        ? { ...q, hasImage: true, imageFile: file, imageUrl } 
+        : q
+    ));
+  };
+
+  const handleRemoveImage = (questionId: string) => {
+    setLocalQuestions(localQuestions.map(q => 
+      q.id === questionId 
+        ? { ...q, hasImage: false, imageFile: undefined, imageUrl: undefined } 
+        : q
+    ));
   };
 
   const handleSaveQuiz = async () => {
@@ -166,15 +186,40 @@ const CreateQuiz = () => {
           
           console.log("Creating question:", questionData);
           
-          const { error: questionError } = await supabase
+          const { data: createdQuestion, error: questionError } = await supabase
             .from('questions')
-            .insert([questionData]);
+            .insert([questionData])
+            .select()
+            .single();
           
           if (questionError) {
             console.error("Error creating question:", questionError);
             toast.error(`Failed to create question ${i + 1}`);
           } else {
             console.log("Question created successfully");
+            
+            // Upload image if present
+            if (question.imageFile && createdQuestion) {
+              try {
+                const { ImageUploadService } = await import('@/services/imageUpload');
+                const imageUrl = await ImageUploadService.uploadQuestionImage(
+                  createdQuiz.id,
+                  createdQuestion.id,
+                  question.imageFile
+                );
+                
+                // Update question with image URL
+                await supabase
+                  .from('questions')
+                  .update({ image_url: imageUrl })
+                  .eq('id', createdQuestion.id);
+                  
+                console.log("Image uploaded successfully");
+              } catch (imageError) {
+                console.error("Error uploading image:", imageError);
+                toast.error(`Failed to upload image for question ${i + 1}`);
+              }
+            }
           }
         }
         
@@ -449,10 +494,38 @@ const CreateQuiz = () => {
                   </div>
 
                   <div className="flex items-center space-x-4">
-                    <Button variant="outline" size="sm" disabled>
-                      <Image className="h-4 w-4 mr-2" />
-                      Add Image
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        id={`image-upload-${question.id}`}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            handleImageUpload(question.id, file);
+                          }
+                        }}
+                      />
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => document.getElementById(`image-upload-${question.id}`)?.click()}
+                      >
+                        <Image className="h-4 w-4 mr-2" />
+                        Add Image
+                      </Button>
+                      {question.hasImage && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRemoveImage(question.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-2">
                       <Label className="text-sm">Points:</Label>
                       <Input
@@ -464,6 +537,16 @@ const CreateQuiz = () => {
                       />
                     </div>
                   </div>
+
+                  {question.hasImage && question.imageUrl && (
+                    <div className="mt-4">
+                      <img
+                        src={question.imageUrl}
+                        alt="Question preview"
+                        className="max-w-md rounded-lg border border-border"
+                      />
+                    </div>
+                  )}
 
                   {question.type === "multiple-choice" && (
                     <div className="space-y-2">
