@@ -69,7 +69,7 @@ const QuizTaking = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
-  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
 
   const { progress, saveProgress, clearProgress } = useQuizProgress(
     isPreview ? null : attemptId, 
